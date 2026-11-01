@@ -1,0 +1,28 @@
+{
+  "total": 38,
+  "correct": 38,
+  "accuracy": 1,
+  "matrix": {
+    "MAJOR": {
+      "MAJOR": 17,
+      "NOT_MAJOR": 0,
+      "INCOMPLETE": 0
+    },
+    "NOT_MAJOR": {
+      "MAJOR": 0,
+      "NOT_MAJOR": 17,
+      "INCOMPLETE": 0
+    },
+    "INCOMPLETE": {
+      "MAJOR": 0,
+      "NOT_MAJOR": 0,
+      "INCOMPLETE": 4
+    }
+  },
+  "failures": [],
+  "fixtureHashes": {
+    "classification.json": "94c177d4ba8b01d4fd96d95d06c955cc7ac6337407dad9cc21c61239c0de627e",
+    "secondary.json": "e568e2cec2e69fcb0cd94fb7fecabcb3bc45acb193b35315339f608224839d62"
+  },
+  "scope": "Labelled synthetic legal-boundary cases; no production accuracy claim."
+}

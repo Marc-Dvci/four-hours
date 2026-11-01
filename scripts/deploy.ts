@@ -1,0 +1,11 @@
+import {readFile} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
+import {requireBillingProtection,type Protection} from '../src/core/cost-policy';
+const policy=JSON.parse(await readFile('config/billing-protection.json','utf8')) as Protection;
+requireBillingProtection(policy,new Date().toISOString());
+const environment=process.argv[2]??'development';
+if(!['development','staging','production'].includes(environment))throw new Error('Use development, staging, or production');
+const cli=process.platform==='win32'?'forge.cmd':'forge';
+const result=spawnSync(cli,['deploy','--environment',environment],{stdio:'inherit',shell:false});
+if(result.error)throw result.error;
+process.exitCode=result.status??1;

@@ -8,5 +8,5 @@
  {"id":"unknown-gateway-low-impact","patch":{"criticalFunction":null},"expected":"NOT_MAJOR"},
  {"id":"regulatory-reputation","patch":{"authorisedService":true,"regulatoryFailure":true,"economicImpact":100001},"expected":"MAJOR"},
  {"id":"material-client-loss","patch":{"authorisedService":true,"materialClientLoss":true,"economicImpact":100001},"expected":"MAJOR"},
- {"id":"zero-every-reference","patch":{"criticalFunction":true,"totalClients":0,"totalCounterparts":0,"dailyTransactions":0,"dailyTransactionValue":0},"expected":"INCOMPLETE"}
+ {"id":"zero-every-reference","patch":{"criticalFunction":true,"totalClients":0,"totalCounterparts":0,"dailyTransactions":0,"dailyTransactionValue":0},"expected":"NOT_MAJOR","reason":"Invalid reference populations leave one materiality group unknown. Even if met, it cannot establish the required two groups. Label corrected after rule review; this is a regression corpus, not a blind evaluation."}
 ]
