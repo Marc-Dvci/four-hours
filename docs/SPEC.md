@@ -4,7 +4,7 @@ Track: Apps for Specialized Industries (finance). Lead bonus: Teamwork Graph. Ad
 
 An ICT risk officer at an EU bank opens a payments incident in Jira Service Management, checks sourced thresholds, signs a classification, and prepares the notification before its deadline.
 
-This needs Jira Service Management because the incident, its evidence and its accountable owner already live there. Teamwork Graph makes the service dependencies and recurring incidents searchable. Confluence holds the signed report history.
+This needs Jira Service Management because the incident, its evidence and its accountable owner already live there. The Teamwork Graph adapter indexes synthetic technical services and reads explicit mappings back into sourced evidence. Recurrence searches readable incidents in Forge storage. The Confluence adapter publishes a review workpaper. Live platform verification is tracked in the release checklist.
 
 ## Judge path
 

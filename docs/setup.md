@@ -53,15 +53,17 @@ forge install --environment development --product confluence --site your-site.at
 1. In Jira, open Apps > Four Hours. Open Settings, select a project you administer and click Load demo bank. This creates five labelled synthetic work items. Retrying resumes from the per-incident seed markers.
 2. Open a demo work item and use Apps > Four Hours for its panel, or continue in the global incident desk.
 3. Inspect the critical-services gateway and six materiality groups. Expand a row to inspect each fact and its provenance.
-4. Sign as a Jira project administrator. Every write requires Jira Edit Issues permission. The actor comes from the authenticated Forge context.
+4. In Settings, a Jira administrator can save the Atlassian account IDs of risk officers. Sign as a configured officer or Jira project administrator. Every write requires Jira Edit Issues permission. The actor comes from the authenticated Forge context.
 5. On Reports, prepare the appropriate stage. Record a genuine submission with its actual timestamp and authority reference. In the synthetic demo, use a clearly labelled demo reference.
 6. On Evidence trail, export the workpaper. To publish it to Confluence, enter the target space's numeric ID in Settings. The current user's Confluence permissions apply.
 
 ## Real incidents
 
-Click Add incident and enter an existing Jira key, the affected service and awareness time. Jira supplies the title. Every classification fact starts as unknown. Edit each fact with a source URL and assessment; then set occurrence time, apparent root cause, service ID, reporting timezone and privacy awareness through Edit incident context.
+Click Add incident and enter an existing Jira key, the affected service and awareness time. Jira supplies the title. Every classification fact starts as unknown. Edit each fact with a source URL and assessment; then set the stable financial entity identifier (shared only within the same legal entity), occurrence time, apparent root cause, service ID, reporting timezone and privacy awareness through Edit incident context.
 
-Jira issue access controls apply to reads and writes. A bound issue panel only permits access to its own incident. Global population and recurrence checks omit records the current user cannot read. Concurrent writes use a version condition inside a Forge storage transaction.
+Jira issue access controls apply to reads and writes. A bound issue panel only permits access to its own incident. Global population and recurrence checks omit records the current user cannot read. Other Jira/storage failures stop the search with a coverage error. Searches cover only readable Four Hours records, not every institutional incident. Concurrent writes use a version condition inside a Forge storage transaction.
+
+See [Jira observations](observations.md) for structured evidence import, [report coverage](report-fields.md) for draft fields and [evidence retention](evidence.md) for independent bundle verification.
 
 ## Teamwork Graph
 
@@ -69,7 +71,7 @@ In Atlassian Administration > Connected apps > Four Hours > Connections, connect
 
 Use Refresh graph evidence to read the synthetic service back from Teamwork Graph and attach its mapped critical-function evidence to the assessment. This creates a hashed revision and requires a new signature.
 
-The dependency drawing is the labelled synthetic replay model. Ingestion acceptance and search indexing are separate platform states. The product reports the accepted count, without claiming search indexing has completed.
+An absent critical-function mapping is refused rather than interpreted as false. The dependency drawing is shown only for its mapped demo service and is the labelled synthetic replay model. Ingestion acceptance and search indexing are separate platform states. The product reports the accepted count, without claiming search indexing has completed.
 
 ## Rovo and MCP
 
@@ -80,3 +82,5 @@ For an MCP client, an administrator enables tool exposure on the installed app. 
 ## Distribution
 
 After production deployment, enable sharing in the Forge developer console and copy its installation link into the submission document. Privacy and terms documents are in `docs/`. A verified installation link and a target-platform demonstration are release requirements.
+
+See the [target-platform release checklist](release-checklist.md) for the exact remaining runtime evidence and operational limits.
