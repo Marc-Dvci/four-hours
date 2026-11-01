@@ -1,0 +1,12 @@
+[
+ {"id":"transaction-count-equal","patch":{"authorisedService":true,"affectedTransactions":100,"dailyTransactions":1000,"economicImpact":200000},"expected":"NOT_MAJOR"},
+ {"id":"transaction-count-over","patch":{"authorisedService":true,"affectedTransactions":101,"dailyTransactions":1000,"economicImpact":200000},"expected":"MAJOR"},
+ {"id":"transaction-value-equal","patch":{"authorisedService":true,"affectedTransactionValue":10000,"dailyTransactionValue":100000,"economicImpact":200000},"expected":"NOT_MAJOR"},
+ {"id":"transaction-value-over","patch":{"authorisedService":true,"affectedTransactionValue":10001,"dailyTransactionValue":100000,"economicImpact":200000},"expected":"MAJOR"},
+ {"id":"malicious-critical-gateway","patch":{"maliciousCriticalAccess":true,"maliciousAccessPotentialLoss":true},"expected":"MAJOR"},
+ {"id":"unknown-malicious-route","patch":{"criticalFunction":true,"maliciousAccessPotentialLoss":null},"expected":"INCOMPLETE"},
+ {"id":"unknown-gateway-low-impact","patch":{"criticalFunction":null},"expected":"NOT_MAJOR"},
+ {"id":"regulatory-reputation","patch":{"authorisedService":true,"regulatoryFailure":true,"economicImpact":100001},"expected":"MAJOR"},
+ {"id":"material-client-loss","patch":{"authorisedService":true,"materialClientLoss":true,"economicImpact":100001},"expected":"MAJOR"},
+ {"id":"zero-every-reference","patch":{"criticalFunction":true,"totalClients":0,"totalCounterparts":0,"dailyTransactions":0,"dailyTransactionValue":0},"expected":"INCOMPLETE"}
+]
