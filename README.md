@@ -1,6 +1,6 @@
 ![Four Hours incident desk](docs/images/incident-desk.png)
 
-![Tests](https://img.shields.io/badge/domain_tests-160_passed-17664e) ![Cases](https://img.shields.io/badge/labelled_cases-38%2F38-17664e) ![Licence](https://img.shields.io/badge/licence-MIT-14243b)
+![Tests](https://img.shields.io/badge/domain_tests-161_passed-17664e) ![Cases](https://img.shields.io/badge/labelled_cases-38%2F38-17664e) ![Licence](https://img.shields.io/badge/licence-MIT-14243b)
 
 **Four Hours gives an ICT risk officer a sourced DORA incident classification and the reporting deadlines that follow it.**
 
@@ -11,7 +11,7 @@ I audit bank technology, payment systems and business continuity. I built the de
 | Try the replay | [Open the incident desk](https://marc-dvci.github.io/four-hours/)                                               |
 | Track          | Codegeist 2026 · Apps for Specialized Industries                                                                |
 | Built with     | Forge, Jira, Confluence, Teamwork Graph connector SDK, Rovo agent and MCP modules, TypeScript, React            |
-| Measured       | 38/38 labelled synthetic classification cases; 160 unit tests; 13 browser workflows; 6,561 logical combinations |
+| Measured       | 38/38 labelled synthetic classification cases; 161 unit tests; 13 browser workflows; 6,561 logical combinations |
 | Run locally    | `npm ci && npm run dev`                                                                                         |
 
 ## For judges
@@ -86,7 +86,7 @@ An incomplete assessment cannot be signed. Changes to signed evidence require a 
 | Check                                            | Result                                                                                                | Reproduce              |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ---------------------- |
 | Legal-boundary corpus                            | 38/38 correct: 17 major, 17 not major, 4 incomplete                                                   | `npm run eval`         |
-| Domain, permissions, projections and cost policy | 160 passing tests                                                                                     | `npm test`             |
+| Domain, permissions, projections and cost policy | 161 passing tests                                                                                     | `npm test`             |
 | Independent truth-completion oracle              | 6,561/6,561 three-valued logical combinations agree                                                   | `npm run eval:oracle`  |
 | Browser workflows                                | 13 passing workflows                                                                                  | `npm run test:browser` |
 | Accessibility                                    | No axe-core WCAG A/AA violations in four sections, signature and report-field dialogs and mobile view | `npm run test:browser` |

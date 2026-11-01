@@ -37,6 +37,13 @@ async function state(): Promise<RecordState> {
   };
 }
 describe("evidence and workflow hardening", () => {
+  it("links a report value to its exact fact when source labels are shared", async () => {
+    const s = await state();
+    for (const fact of Object.values(s.incident.facts))
+      fact.source = "Shared monitoring label";
+    const field = reportFields(s, "initial").find((f) => f.code === "clients")!;
+    expect(field.sourceUrls).toEqual([s.incident.facts.affectedClients.url]);
+  });
   it("does not aggregate distinct financial entities sharing an apparent root cause", () => {
     const a = makeIncident(
       {

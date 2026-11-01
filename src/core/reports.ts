@@ -3,6 +3,7 @@ import { hash, signatureCurrent, type RecordState } from "./ledger";
 import type { ReportKind } from "./clocks";
 import { detailsFor } from "./report-details";
 import { verifyRecord } from "./integrity";
+import type { FactKey } from "./model";
 
 export type ReportField = {
   code: string;
@@ -18,6 +19,13 @@ export function reportFields(
   const i = state.incident;
   const a = classify(i);
   const f = i.facts;
+  const sourceFields: Record<string, FactKey> = {
+    services: "criticalFunction",
+    clients: "affectedClients",
+    countries: "memberStates",
+    "impact-cost": "economicImpact",
+    duration: "durationMinutes",
+  };
   const field = (
     code: string,
     label: string,
@@ -28,13 +36,7 @@ export function reportFields(
     label,
     value: value === null ? "Evidence required" : String(value),
     citations,
-    sourceUrls: [
-      ...new Set(
-        Object.values(f)
-          .filter((fact) => citations.includes(fact.source))
-          .map((fact) => fact.url),
-      ),
-    ],
+    sourceUrls: sourceFields[code] ? [f[sourceFields[code]!].url] : [],
   });
   const result = [
     field("incident-reference", "Incident reference", i.id, ["Jira work item"]),
