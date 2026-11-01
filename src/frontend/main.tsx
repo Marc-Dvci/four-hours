@@ -829,7 +829,10 @@ function App() {
                         assessment.verdict === "INCOMPLETE" ||
                         !row?.chainValid
                       }
-                      onClick={() => setModal("sign")}
+                      onClick={() => {
+                        setRationale(assessment.explanation);
+                        setModal("sign");
+                      }}
                     >
                       Sign classification <Arrow />
                     </button>
@@ -1113,6 +1116,48 @@ function App() {
                     Working fields follow the DORA reporting stages. Review them
                     against your authority’s current form.
                   </p>
+                </div>
+                <div className="privacy-assessment">
+                  <h3>Personal-data-breach assessment</h3>
+                  <p>
+                    GDPR uses a separate awareness time and risk test. Record
+                    the privacy evidence independently of the DORA
+                    classification.
+                  </p>
+                  <div>
+                    <span>
+                      Personal-data breach:{" "}
+                      <strong>
+                        {valueText(incident.facts.personalDataBreach.value)}
+                      </strong>
+                    </span>
+                    <button
+                      className="text-button"
+                      onClick={() => edit("personalDataBreach")}
+                    >
+                      Edit personal-data breach
+                    </button>
+                  </div>
+                  <div>
+                    <span>
+                      Risk unlikely:{" "}
+                      <strong>
+                        {valueText(incident.facts.gdprRiskUnlikely.value)}
+                      </strong>
+                    </span>
+                    <button
+                      className="text-button"
+                      onClick={() => edit("gdprRiskUnlikely")}
+                    >
+                      Edit privacy risk assessment
+                    </button>
+                  </div>
+                  <small>
+                    Privacy awareness:{" "}
+                    {incident.privacyAwarenessAt
+                      ? time(incident.privacyAwarenessAt, true) + " Paris"
+                      : "Not recorded; set it in incident context"}
+                  </small>
                 </div>
                 <table className="report-table">
                   <thead>

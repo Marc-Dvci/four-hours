@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("./");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(
@@ -216,6 +216,19 @@ test("incident context and GDPR evidence stay distinct", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Incident context updated" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page.getByRole("button", { name: "Edit personal-data breach" }).click();
+  await page.getByLabel("Recorded value").fill("true");
+  await page.getByRole("button", { name: "Save evidence" }).click();
+  await page
+    .getByRole("button", { name: "Edit privacy risk assessment" })
+    .click();
+  await page.getByLabel("Recorded value").fill("false");
+  await page.getByRole("button", { name: "Save evidence" }).click();
+  await expect(
+    page.getByText("GDPR notification", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("01 Nov, 10:30", { exact: true })).toBeVisible();
 });
 
 test("invalid evidence remains visible in its dialog and can be corrected", async ({
@@ -236,7 +249,7 @@ test("invalid evidence remains visible in its dialog and can be corrected", asyn
 test("standalone replay makes no external service calls", async ({ page }) => {
   const external: string[] = [];
   page.on("request", (r) => {
-    if (!new URL(r.url()).hostname.match(/^(127\.0\.0\.1|localhost)$/))
+    if (new URL(r.url()).origin !== new URL(page.url()).origin)
       external.push(r.url());
   });
   await page.reload();

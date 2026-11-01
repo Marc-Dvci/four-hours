@@ -5,17 +5,19 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:4173",
     viewport: { width: 1600, height: 1100 },
     timezoneId: "Europe/Paris",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...(process.env.CI ? {} : { channel: "chrome" }),
   },
-  webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:4173",
-    reuseExistingServer: true,
-    timeout: 30000,
-  },
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: "http://127.0.0.1:4173",
+        reuseExistingServer: true,
+        timeout: 30000,
+      },
 });
