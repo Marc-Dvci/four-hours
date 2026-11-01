@@ -1,0 +1,47 @@
+{
+  "name": "four-hours",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Evidence-led DORA incident classification and reporting clocks for Jira Service Management.",
+  "author": "Marc Donovici",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22.14" },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx eval/run.ts",
+    "test:browser": "playwright test",
+    "manifest": "node scripts/manifest.cjs",
+    "audit": "npm run typecheck && npm test && npm run eval && npm run build && npm run manifest",
+    "forge": "forge"
+  },
+  "dependencies": {
+    "@forge/api": "latest",
+    "@forge/bridge": "latest",
+    "@forge/kvs": "latest",
+    "@forge/resolver": "latest",
+    "@forge/teamwork-graph": "latest",
+    "@js-temporal/polyfill": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "latest",
+    "@forge/cli": "latest",
+    "@forge/manifest": "latest",
+    "@playwright/test": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest"
+  }
+}
