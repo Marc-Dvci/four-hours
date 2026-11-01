@@ -1,8 +1,13 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
+  await expect(
+    page.getByRole("heading", {
+      name: "Urgent payments are not reaching settlement",
+    }),
+  ).toBeVisible();
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(
@@ -43,7 +48,7 @@ test("sign, prepare, submit, update, export and verify", async ({ page }) => {
     page.getByText(/Unsupported values or citations: 999999/),
   ).toBeVisible();
   await page.getByRole("button", { name: /Evidence trail/ }).click();
-  await expect(page.getByText("✓ CHAIN VERIFIED")).toBeVisible();
+  await expect(page.getByText("✓ CHAIN CONSISTENT")).toBeVisible();
   const download = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "Export workpaper", exact: false })
@@ -82,7 +87,9 @@ test("recurrence and graph exploration", async ({ page }) => {
   await expect(
     page.getByText("FH-476 + FH-441", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Use combined evidence" }).click();
+  await page
+    .getByRole("button", { name: "Create collective incident" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Major incident", exact: true }),
   ).toBeVisible();
@@ -152,6 +159,21 @@ test("accessibility across all four sections and signature dialog", async ({
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
   reports.push({ section: "Signature dialog", violations: modal.violations });
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Edit report field Financial entity name",
+      exact: true,
+    })
+    .click();
+  const reportEditor = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+    .analyze();
+  reports.push({
+    section: "Report field dialog",
+    violations: reportEditor.violations,
+  });
   await mkdir("eval/reports", { recursive: true });
   await writeFile(
     "eval/reports/accessibility.json",
@@ -190,6 +212,14 @@ test("mobile layout and real product captures", async ({ page }) => {
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
   expect(result.violations).toEqual([]);
+  for (const section of ["Service context", "Reports", "Evidence trail"]) {
+    await page.getByRole("button", { name: new RegExp(`^${section}`) }).click();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
 });
 
 test("incident context and GDPR evidence stay distinct", async ({ page }) => {
@@ -218,17 +248,19 @@ test("incident context and GDPR evidence stay distinct", async ({ page }) => {
   ).toBeVisible();
   await page.getByRole("button", { name: "Reports", exact: true }).click();
   await page.getByRole("button", { name: "Edit personal-data breach" }).click();
-  await page.getByLabel("Recorded value").fill("true");
+  await page.getByLabel("Recorded value").selectOption("true");
   await page.getByRole("button", { name: "Save evidence" }).click();
   await page
     .getByRole("button", { name: "Edit privacy risk assessment" })
     .click();
-  await page.getByLabel("Recorded value").fill("false");
+  await page.getByLabel("Recorded value").selectOption("false");
   await page.getByRole("button", { name: "Save evidence" }).click();
   await expect(
-    page.getByText("GDPR notification", { exact: true }),
+    page.getByText("GDPR NOTIFICATION DUE", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("01 Nov, 10:30", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Due 01 Nov, 10:30 Paris", { exact: true }),
+  ).toBeVisible();
 });
 
 test("invalid evidence remains visible in its dialog and can be corrected", async ({
@@ -248,11 +280,16 @@ test("invalid evidence remains visible in its dialog and can be corrected", asyn
 
 test("standalone replay makes no external service calls", async ({ page }) => {
   const external: string[] = [];
+  const exceptions: string[] = [];
+  page.on("pageerror", (error) => exceptions.push(error.message));
   page.on("request", (r) => {
     if (new URL(r.url()).origin !== new URL(page.url()).origin)
       external.push(r.url());
   });
   await page.reload();
+  await page
+    .getByRole("button", { name: "Import Jira observations", exact: false })
+    .click();
   await page
     .getByRole("button", { name: "Service context", exact: true })
     .click();
@@ -265,4 +302,116 @@ test("standalone replay makes no external service calls", async ({ page }) => {
     ),
   ).toBeVisible();
   expect(external).toEqual([]);
+  expect(exceptions).toEqual([]);
+});
+
+test("export sourced report fields and independently verifiable evidence", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Edit report field Financial entity name",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByLabel("Recorded report field")
+    .fill("Demonstration Payments Ltd");
+  await page.getByRole("button", { name: "Save report field" }).click();
+  await expect(
+    page.getByText("Demonstration Payments Ltd", { exact: true }),
+  ).toBeVisible();
+  const draft = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export report draft", exact: false })
+    .click();
+  const draftFile = await draft;
+  expect(draftFile.suggestedFilename()).toContain("initial-draft.json");
+  const contents = JSON.parse(
+    await readFile((await draftFile.path())!, "utf8"),
+  );
+  expect(contents.classificationCurrent).toBe(false);
+  expect(
+    contents.fields.find((f: { code: string }) => f.code === "entity-name")
+      .value,
+  ).toBe("Demonstration Payments Ltd");
+  const bundle = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Evidence bundle", exact: false })
+    .click();
+  expect((await bundle).suggestedFilename()).toBe(
+    "four-hours-fh-482-evidence.json",
+  );
+  await expect(page.getByText(/Retain its digest separately/)).toBeVisible();
+});
+
+test("the main clock advances to the intermediate deadline", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Sign classification", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Confirm classification" }).click();
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page.getByRole("button", { name: "Record submission" }).click();
+  await page.getByLabel("Authority receipt reference").fill("NCA-STAGE-001");
+  await page
+    .getByRole("button", { name: "Record receipt", exact: true })
+    .click();
+  await expect(
+    page.getByText("INTERMEDIATE REPORT DUE", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".clock-main")).toContainText("72");
+});
+
+test("GDPR can be recorded without a DORA major signature", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Edit incident context" }).click();
+  await page
+    .getByLabel("Personal-data-breach awareness time")
+    .fill("2026-10-29T10:30");
+  await page.getByRole("button", { name: "Save incident context" }).click();
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  for (const [button, value] of [
+    ["Edit personal-data breach", "true"],
+    ["Edit privacy risk assessment", "false"],
+  ] as const) {
+    await page.getByRole("button", { name: button }).click();
+    await page.getByLabel("Recorded value").selectOption(value);
+    await page.getByRole("button", { name: "Save evidence" }).click();
+  }
+  await page.getByLabel("Report stage", { exact: true }).selectOption("gdpr");
+  await page.getByRole("button", { name: "Record submission" }).click();
+  await page.getByLabel("Authority receipt reference").fill("DPA-DEMO-001");
+  await page
+    .getByRole("button", { name: "Record receipt", exact: true })
+    .click();
+  await expect(page.getByText("DPA-DEMO-001", { exact: true })).toBeVisible();
+});
+
+test("a changed record cannot be overwritten by a stale browser tab", async ({
+  page,
+  context,
+}) => {
+  const other = await context.newPage();
+  await other.goto("./");
+  await other
+    .getByRole("heading", {
+      name: "Urgent payments are not reaching settlement",
+    })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Sign classification", exact: true })
+    .click();
+  await other
+    .getByRole("button", { name: "Sign classification", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Confirm classification" }).click();
+  await other.getByRole("button", { name: "Confirm classification" }).click();
+  await expect(other.getByRole("dialog").getByRole("alert")).toContainText(
+    "changed in another session",
+  );
+  await other.close();
 });

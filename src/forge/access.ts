@@ -1,6 +1,7 @@
 import api, { route } from "@forge/api";
 import { z } from "zod";
 export const issueKey = z.string().regex(/^[A-Z][A-Z0-9_]*-\d+$/);
+export class UnavailableIncident extends Error {}
 export type RequestContext = {
   accountId?: string;
   extension?: { issue?: { key?: string } };
@@ -22,9 +23,13 @@ export async function readable(
   const r = await api
     .asUser()
     .requestJira(route`/rest/api/3/issue/${key}?fields=summary`);
+  if (r.status === 403 || r.status === 404)
+    throw new UnavailableIncident(
+      "This incident is unavailable or you do not have permission to read it",
+    );
   if (!r.ok)
     throw new Error(
-      "This incident is unavailable or you do not have permission to read it",
+      `Jira incident access check failed (HTTP ${r.status}). Refresh when Jira is available.`,
     );
 }
 export async function permission(name: string, key?: string): Promise<boolean> {

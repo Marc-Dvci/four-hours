@@ -1,20 +1,24 @@
-import { incidentSchema, type FactKey, type Incident } from "../core/model";
+import { incidentSchema, type Incident } from "../core/model";
 import { updateContext } from "../core/context";
+import { updateEvidence } from "../core/evidence";
+import { verifyRecord } from "../core/integrity";
+import { evidenceBundle } from "../core/bundle";
+import { updateReportDetail } from "../core/report-details";
 import {
   append,
   hash,
   sign,
   recordSubmission,
-  verify,
   type RecordState,
 } from "../core/ledger";
 import { classify } from "../core/classify";
 import { clocks } from "../core/clocks";
-import { recurring } from "../core/recurrence";
+import { recurring, collectiveCase } from "../core/recurrence";
 import { reportFields, validateNarrative, workpaper } from "../core/reports";
 import { seedStates, REPLAY_NOW } from "../demo/bank";
 
 export const isForge =
+  /\.atlassian-dev\.net$/.test(location.hostname) &&
   window.parent !== window &&
   !new URLSearchParams(location.search).has("replay");
 // No metadata is requested, so Forge returns the resolver body directly.
@@ -40,7 +44,7 @@ export type Bootstrap = {
   boundKey?: string;
   graphStatus?: { accepted: number; at: string };
 };
-const storageKey = "four-hours.replay.v1";
+const storageKey = "four-hours.replay.v3";
 let replayNow = REPLAY_NOW;
 let records: { version: number; data: RecordState }[] = [];
 const demoActor = "replay:risk-officer";
@@ -49,7 +53,7 @@ async function rows(): Promise<Row[]> {
     records.map(async (r) => ({
       ...r,
       evidenceHash: await hash(r.data.incident),
-      chainValid: await verify(r.data.revisions),
+      chainValid: await verifyRecord(r.data),
     })),
   );
 }
@@ -72,13 +76,27 @@ export async function bootstrap(): Promise<Bootstrap> {
       records = cached.records;
       replayNow = cached.now;
     } else {
-      records = seedStates().map((data) => ({ version: 1, data }));
+      records = await Promise.all(
+        seedStates().map(async (data) => ({
+          version: Date.now(),
+          data: {
+            ...data,
+            revisions: await append(
+              [],
+              demoActor,
+              "incident.created",
+              data.incident,
+              data.incident.assessedAt,
+            ),
+          },
+        })),
+      );
       persist();
     }
   } catch {
-    records = seedStates().map((data) => ({ version: 1, data }));
-    replayNow = REPLAY_NOW;
-    persist();
+    throw new Error(
+      "The saved replay cannot be read. Open Settings to reset it; the saved data has been preserved.",
+    );
   }
   return {
     records: await rows(),
@@ -89,20 +107,41 @@ export async function bootstrap(): Promise<Bootstrap> {
   };
 }
 export async function reset(): Promise<Bootstrap> {
-  localStorage.removeItem(storageKey);
-  records = [];
-  replayNow = REPLAY_NOW;
-  return bootstrap();
+  return navigator.locks.request(storageKey, async () => {
+    localStorage.removeItem(storageKey);
+    records = [];
+    replayNow = REPLAY_NOW;
+    return bootstrap();
+  });
 }
 export async function advance(hours: number): Promise<Bootstrap> {
-  replayNow = new Date(Date.parse(replayNow) + hours * 3600000).toISOString();
-  persist();
-  return bootstrap();
+  return navigator.locks.request(storageKey, async () => {
+    await bootstrap();
+    replayNow = new Date(Date.parse(replayNow) + hours * 3600000).toISOString();
+    persist();
+    return bootstrap();
+  });
 }
 export async function mutation(
   key: string,
   version: number,
-  action: "sign" | "evidence" | "submit" | "context",
+  action: "sign" | "evidence" | "submit" | "context" | "report-field",
+  payload: Record<string, unknown>,
+): Promise<Row> {
+  if (isForge)
+    return invoke<Row>("mutate", { key, version, action, ...payload });
+  if (!navigator.locks)
+    throw new Error(
+      "This browser cannot safely coordinate edits. Open the replay in a current Chrome, Edge, Firefox or Safari browser.",
+    );
+  return navigator.locks.request(storageKey, () =>
+    mutateReplay(key, version, action, payload),
+  );
+}
+async function mutateReplay(
+  key: string,
+  version: number,
+  action: "sign" | "evidence" | "submit" | "context" | "report-field",
   payload: Record<string, unknown>,
 ): Promise<Row> {
   if (isForge)
@@ -118,7 +157,7 @@ export async function mutation(
     throw new Error(
       "The incident changed in another session. Refresh before saving.",
     );
-  if (!(await verify(current.data.revisions)))
+  if (!(await verifyRecord(current.data)))
     throw new Error("The evidence chain is invalid");
   let data: RecordState;
   if (action === "sign")
@@ -127,6 +166,7 @@ export async function mutation(
       demoActor,
       String(payload.rationale ?? ""),
       replayNow,
+      payload.classifiedAt ? String(payload.classifiedAt) : replayNow,
     );
   else if (action === "submit")
     data = await recordSubmission(
@@ -142,36 +182,21 @@ export async function mutation(
       demoActor,
       replayNow,
     );
-  else {
-    const incident = structuredClone(current.data.incident);
-    const field = payload.field as FactKey;
-    if (!(field in incident.facts)) throw new Error("Unknown evidence field");
-    (incident.facts[field] as { value: unknown }).value = payload.value;
-    incident.facts[field].source = String(payload.source);
-    incident.facts[field].url = String(payload.url);
-    incident.facts[field].observedAt = replayNow;
-    incident.facts[field].quality = "synthetic";
-    incident.assessedAt = replayNow;
-    incidentSchema.parse(incident);
-    data = {
-      ...current.data,
-      incident,
-      revisions: await append(
-        current.data.revisions,
-        demoActor,
-        "evidence.updated",
-        { field, fact: incident.facts[field] },
-        replayNow,
-      ),
-    };
-  }
+  else if (action === "report-field")
+    data = await updateReportDetail(
+      current.data,
+      payload,
+      demoActor,
+      replayNow,
+    );
+  else data = await updateEvidence(current.data, payload, demoActor, replayNow);
   const next = { version: version + 1, data };
   records[index] = next;
   persist();
   return {
     ...next,
     evidenceHash: await hash(data.incident),
-    chainValid: await verify(data.revisions),
+    chainValid: await verifyRecord(data),
   };
 }
 export async function getRecurrence(key: string) {
@@ -180,7 +205,7 @@ export async function getRecurrence(key: string) {
   const current = records.find((r) => r.data.incident.id === key)!;
   return recurring(
     current.data.incident,
-    records.map((r) => r.data.incident),
+    records.filter((r) => !r.data.recurrence).map((r) => r.data.incident),
   );
 }
 export async function getReport(
@@ -209,8 +234,14 @@ export async function checkNarrative(key: string, text: string) {
     records.find((r) => r.data.incident.id === key)!.data,
   );
 }
-export async function createIncident(incident: Incident) {
+export async function createIncident(incident: Incident): Promise<Row> {
   if (isForge) return invoke<Row>("createIncident", { incident });
+  return navigator.locks.request(storageKey, () =>
+    createReplayIncident(incident),
+  );
+}
+async function createReplayIncident(incident: Incident): Promise<Row> {
+  await bootstrap();
   if (records.some((r) => r.data.incident.id === incident.id))
     throw new Error("This incident already exists");
   incidentSchema.parse(incident);
@@ -226,7 +257,7 @@ export async function createIncident(incident: Incident) {
       replayNow,
     ),
   };
-  const r = { version: 1, data };
+  const r = { version: Date.now(), data };
   records.push(r);
   persist();
   return { ...r, evidenceHash: await hash(incident), chainValid: true };
@@ -236,3 +267,57 @@ export const forgeCall = <T>(
   payload?: Record<string, unknown>,
 ) => invoke<T>(method, payload);
 export { classify, clocks };
+export async function exportEvidenceBundle(key: string) {
+  if (isForge)
+    return invoke<Awaited<ReturnType<typeof evidenceBundle>>>(
+      "evidenceBundle",
+      { key },
+    );
+  return evidenceBundle(
+    records.find((r) => r.data.incident.id === key)!.data,
+    replayNow,
+  );
+}
+
+export async function createCollective(key: string): Promise<Row> {
+  if (isForge) return invoke<Row>("createCollective", { key });
+  return navigator.locks.request(storageKey, async () => {
+    await bootstrap();
+    const current = records.find((r) => r.data.incident.id === key)?.data
+      .incident;
+    if (!current) throw new Error("Incident unavailable");
+    const result = recurring(
+      current,
+      records.filter((r) => !r.data.recurrence).map((r) => r.data.incident),
+    );
+    const existing = records.find(
+      (r) =>
+        r.data.recurrence &&
+        [...r.data.recurrence.memberIds].sort().join("|") ===
+          [...result.incidentIds].sort().join("|"),
+    );
+    if (existing)
+      return {
+        ...existing,
+        evidenceHash: await hash(existing.data.incident),
+        chainValid: await verifyRecord(existing.data),
+      };
+    const prefix = key.split("-")[0]!;
+    const id = `${prefix}-${Math.max(0, ...records.filter((r) => r.data.incident.id.startsWith(prefix + "-")).map((r) => Number(r.data.incident.id.split("-")[1]))) + 1}`;
+    const data = await collectiveCase(
+      current,
+      records.filter((r) => !r.data.recurrence).map((r) => r.data.incident),
+      id,
+      demoActor,
+      replayNow,
+    );
+    const row = { version: 1, data };
+    records.push(row);
+    persist();
+    return {
+      ...row,
+      evidenceHash: await hash(data.incident),
+      chainValid: true,
+    };
+  });
+}

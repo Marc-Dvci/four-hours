@@ -28,10 +28,10 @@ describe("recurring incidents", () => {
     expect(recurring(a(), [b()]).assessment?.verdict).toBe("MAJOR"));
   it("deduplicates repeated incident IDs", () =>
     expect(recurring(a(), [a(), b(), b()]).incidentIds).toHaveLength(2));
-  it("requires the same service", () => {
+  it("combines the same root cause across services", () => {
     const x = b();
     x.serviceId = "another";
-    expect(recurring(a(), [x]).assessment).toBeNull();
+    expect(recurring(a(), [x]).assessment?.verdict).toBe("MAJOR");
   });
   it("requires the same apparent root cause", () => {
     const x = b();

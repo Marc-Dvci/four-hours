@@ -43,7 +43,7 @@ await writeFile(
 );
 await writeFile(
   "eval/reports/RESULTS.md",
-  `# Classification evaluation\n\n${correct}/${total} labelled synthetic cases correct.\n\nRows are labels; columns are predictions.\n\n| Label | MAJOR | NOT_MAJOR | INCOMPLETE |\n|---|---:|---:|---:|\n${labels.map((x) => `| ${x} | ${labels.map((y) => matrix[x]![y]).join(" | ")} |`).join("\n")}\n\nReproduce: \`npm run eval\`.\n\n${result.scope}\n`,
+  `# Classification evaluation\n\n${correct}/${total} labelled synthetic cases correct.\n\nRows are labels; columns are predictions.\n\n| Label | MAJOR | NOT_MAJOR | INCOMPLETE |\n|---|---:|---:|---:|\n${labels.map((x) => `| ${x} | ${labels.map((y) => matrix[x]![y]).join(" | ")} |`).join("\n")}\n\nReproduce: \`npm run eval\`.\n\n${result.scope}\n\n## Independent logical conformance\n\nRun \`npm run eval:oracle\` for 6,561 three-valued combinations checked against an independently implemented truth-completion oracle. See [logical-conformance.json](logical-conformance.json) for counts, scope, runtime and local classification latency. This is logical conformance conditional on the encoded legal interpretation, not a blind study or independent legal certification.\n`,
 );
 console.log(`${correct}/${total} cases correct`);
 console.log(JSON.stringify(matrix));

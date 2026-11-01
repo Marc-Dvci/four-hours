@@ -1,5 +1,6 @@
 import { kvs, Filter, FilterConditions, WhereConditions } from "@forge/kvs";
-import { canonical, verify, type RecordState } from "../core/ledger";
+import { canonical, type RecordState } from "../core/ledger";
+import { verifyRecord } from "../core/integrity";
 export type Stored = { version: number; data: RecordState };
 const entity = () => kvs.entity<Stored>("incident");
 export const read = (key: string) => entity().get(key);
@@ -8,11 +9,11 @@ export async function save(
   state: RecordState,
   expectedVersion: number,
 ): Promise<number> {
-  if (!(await verify(state.revisions)))
+  if (!(await verifyRecord(state)))
     throw new Error("Evidence chain verification failed");
   if (new TextEncoder().encode(canonical(state)).length > 220000)
     throw new Error(
-      "Export this incident history before adding further revisions",
+      "This incident reached its safe storage limit. Retain an evidence bundle and create a linked follow-up incident before continuing.",
     );
   const next = { version: expectedVersion + 1, data: state };
   const condition =
@@ -30,7 +31,7 @@ export async function save(
       .execute();
   } catch {
     throw new Error(
-      "The incident changed in another session. Refresh before saving.",
+      "The save could not be committed. Another session may have changed the incident, or Forge storage is unavailable. Refresh before retrying.",
     );
   }
   return next.version;

@@ -68,7 +68,18 @@ export const incidentSchema = z
       "nis2-essential-important",
       "other",
     ]),
-    timezone: z.string().default("Europe/Paris"),
+    entityId: z.string().trim().min(1).max(100).default("installation-entity"),
+    timezone: z
+      .string()
+      .refine((s) => {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: s });
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Use a valid reporting timezone")
+      .default("Europe/Paris"),
     recurrenceExempt: z.boolean(),
     synthetic: z.boolean(),
     facts: factsSchema,

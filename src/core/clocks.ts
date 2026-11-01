@@ -2,19 +2,22 @@ import { Temporal } from "@js-temporal/polyfill";
 import { instant, type Incident } from "./model";
 
 export type ReportKind =
-  "initial" | "intermediate" | "final" | "reclassification";
+  "initial" | "intermediate" | "final" | "reclassification" | "gdpr";
 export type Receipt = {
   kind: ReportKind;
   submittedAt: string;
   reference: string;
   actor: string;
   note?: string;
+  recordedAt?: string;
 };
 export type Signature = {
   verdict: "MAJOR" | "NOT_MAJOR";
   signedAt: string;
+  classifiedAt?: string;
   majorClassifiedAt?: string;
   majorAwarenessAt?: string;
+  initialDueAt?: string;
   actor: string;
   evidenceHash: string;
   rationale: string;
@@ -37,6 +40,14 @@ export function calendarMonth(s: string, timezone: string): string {
   return at(s)
     .toZonedDateTimeISO(timezone)
     .add({ months: 1 }, { overflow: "constrain" })
+    .with({
+      hour: 23,
+      minute: 59,
+      second: 59,
+      millisecond: 999,
+      microsecond: 0,
+      nanosecond: 0,
+    })
     .toInstant()
     .toString();
 }
@@ -70,7 +81,12 @@ export function extendDeadline(
   timezone: string,
   policy?: CalendarPolicy,
 ): string {
-  if (!policy?.applyExtension || (kind !== "final" && entity !== "other"))
+  if (
+    kind === "gdpr" ||
+    kind === "reclassification" ||
+    !policy?.applyExtension ||
+    (kind !== "final" && entity !== "other")
+  )
     return dueAt;
   let day = at(dueAt).toZonedDateTimeISO(timezone);
   const closed = () =>
@@ -145,6 +161,12 @@ export function clocks(
           signature.majorClassifiedAt ?? signature.signedAt,
         )
       : null;
+  if (
+    deadline &&
+    signature?.initialDueAt &&
+    Date.parse(signature.initialDueAt) < Date.parse(deadline.dueAt)
+  )
+    deadline.dueAt = signature.initialDueAt;
   const adjust = (s: string, k: ReportKind) =>
     extendDeadline(s, k, incident.entity, incident.timezone, calendar);
   const result = [
@@ -168,7 +190,7 @@ export function clocks(
       latest
         ? adjust(calendarMonth(latest.submittedAt, incident.timezone), "final")
         : null,
-      "2025/301 Art. 5(1)(c): latest intermediate submission +1 calendar month",
+      "2025/301 Art. 5(1)(c) and 1182/71 Art. 3(2)(c): corresponding calendar date, end of local day; review the authority's form and any applicable extension",
       final,
     ),
   ];
@@ -190,8 +212,17 @@ export function clocks(
           : applies
             ? "GDPR Art. 33(1): personal-data-breach awareness +72h"
             : "Assess personal-data breach and risk; separate awareness time required",
+        receipts.find((r) => r.kind === "gdpr"),
       ),
     );
   }
   return result;
+}
+
+export function nextDeadline(items: Clock[]): Clock | undefined {
+  return items
+    .filter(
+      (c) => c.dueAt && (c.status === "running" || c.status === "overdue"),
+    )
+    .sort((a, b) => Date.parse(a.dueAt!) - Date.parse(b.dueAt!))[0];
 }

@@ -12,7 +12,9 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": [
     "src",

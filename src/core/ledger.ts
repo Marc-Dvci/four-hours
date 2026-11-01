@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { instant, type Incident } from "./model";
 import { classify } from "./classify";
-import type { Receipt, Signature } from "./clocks";
+import {
+  clocks,
+  initialDeadline,
+  type Receipt,
+  type Signature,
+} from "./clocks";
 
 export function canonical(value: unknown): string {
   if (value === null || typeof value === "string" || typeof value === "boolean")
@@ -55,16 +60,24 @@ export async function append(
   return [...revisions, { ...body, hash: await hash(body) }];
 }
 export async function verify(revisions: Revision[]): Promise<boolean> {
+  if (!Array.isArray(revisions)) return false;
   let previous = "0".repeat(64);
   let lastTime = 0;
   for (let i = 0; i < revisions.length; i++) {
     const r = revisions[i]!;
+    if (
+      !r ||
+      !instant.safeParse(r.at).success ||
+      typeof r.actor !== "string" ||
+      !r.actor.trim()
+    )
+      return false;
     const { hash: stored, ...body } = r;
     if (
       r.sequence !== i + 1 ||
       r.previousHash !== previous ||
       Date.parse(r.at) < lastTime ||
-      (await hash(body)) !== stored
+      (await hash(body).catch(() => null)) !== stored
     )
       return false;
     previous = stored;
@@ -77,15 +90,56 @@ export type RecordState = {
   signature: Signature | null;
   receipts: Receipt[];
   revisions: Revision[];
+  recurrence?: { memberIds: string[]; members: Incident[]; detectedAt: string };
+  reportDetails?: Record<
+    string,
+    { value: string; source: string; url: string; observedAt: string }
+  >;
 };
+export function assertOpen(state: RecordState): void {
+  if (
+    state.receipts.some(
+      (r) => r.kind === "final" || r.kind === "reclassification",
+    )
+  )
+    throw new Error(
+      "This incident is closed by its final report or reclassification notice",
+    );
+}
+export function signedIncident(state: RecordState): Incident | null {
+  const entry = [...state.revisions]
+    .reverse()
+    .find((r) => r.action === "classification.signed");
+  return (
+    (entry?.payload as { incident?: Incident } | undefined)?.incident ?? null
+  );
+}
+export function signatureCurrent(state: RecordState): boolean {
+  const snapshot = signedIncident(state);
+  return (
+    !!state.signature &&
+    !!snapshot &&
+    canonical(snapshot) === canonical(state.incident)
+  );
+}
 export async function sign(
   state: RecordState,
   actor: string,
   rationale: string,
   now: string,
+  actualClassifiedAt: string = now,
 ): Promise<RecordState> {
   if (!(await verify(state.revisions)))
     throw new Error("The evidence chain is invalid");
+  assertOpen(state);
+  instant.parse(actualClassifiedAt);
+  if (
+    Date.parse(actualClassifiedAt) > Date.parse(now) ||
+    Date.parse(actualClassifiedAt) < Date.parse(state.incident.awarenessAt)
+  )
+    throw new Error(
+      "Classification time must be between awareness and the attestation time",
+    );
   const assessment = classify(state.incident);
   if (assessment.verdict === "INCOMPLETE")
     throw new Error("Complete the classification evidence before signing");
@@ -104,18 +158,31 @@ export async function sign(
       (r.payload as { signature?: Signature }).signature?.verdict === "MAJOR",
   );
   const firstMajorAt = originalMajor
-    ? (originalMajor.payload as { signature: Signature }).signature.signedAt
-    : now;
+    ? ((originalMajor.payload as { signature: Signature }).signature
+        .majorClassifiedAt ??
+      (originalMajor.payload as { signature: Signature }).signature
+        .classifiedAt ??
+      (originalMajor.payload as { signature: Signature }).signature.signedAt)
+    : actualClassifiedAt;
   const firstMajorAwareness = originalMajor
     ? (originalMajor.payload as { incident: Incident }).incident.awarenessAt
     : state.incident.awarenessAt;
+  const originalSignature = originalMajor
+    ? (originalMajor.payload as { signature: Signature }).signature
+    : null;
+  const due =
+    assessment.verdict === "MAJOR" || originalMajor
+      ? initialDeadline(firstMajorAwareness, firstMajorAt).dueAt
+      : undefined;
   const signature: Signature = {
     verdict: assessment.verdict,
     signedAt: now,
+    classifiedAt: actualClassifiedAt,
     ...(assessment.verdict === "MAJOR" || originalMajor
       ? {
           majorClassifiedAt: firstMajorAt,
           majorAwarenessAt: firstMajorAwareness,
+          initialDueAt: originalSignature?.initialDueAt ?? due!,
         }
       : {}),
     actor,
@@ -135,7 +202,13 @@ export async function sign(
   };
 }
 const receiptSchema = z.object({
-  kind: z.enum(["initial", "intermediate", "final", "reclassification"]),
+  kind: z.enum([
+    "initial",
+    "intermediate",
+    "final",
+    "reclassification",
+    "gdpr",
+  ]),
   submittedAt: instant,
   reference: z.string().trim().min(3).max(200),
   note: z.string().max(2000).optional(),
@@ -149,27 +222,70 @@ export async function recordSubmission(
   if (!(await verify(state.revisions)))
     throw new Error("The evidence chain is invalid");
   const data = receiptSchema.parse(input);
-  if (!state.signature) throw new Error("Sign the classification first");
-  if (state.signature.evidenceHash !== (await hash(state.incident)))
+  if (data.kind !== "gdpr") assertOpen(state);
+  if (data.kind === "gdpr") {
+    if (
+      state.incident.facts.personalDataBreach.value !== true ||
+      state.incident.facts.gdprRiskUnlikely.value !== false ||
+      !state.incident.privacyAwarenessAt
+    )
+      throw new Error(
+        "Record the personal-data breach, risk test and separate awareness time first",
+      );
+  } else if (!state.signature) throw new Error("Sign the classification first");
+  if (
+    data.kind !== "gdpr" &&
+    state.signature!.evidenceHash !== (await hash(state.incident))
+  )
     throw new Error(
       "Evidence changed. Sign a fresh classification before recording submission",
     );
   if (Date.parse(data.submittedAt) > Date.parse(now))
     throw new Error("A submission cannot be recorded in the future");
-  if (Date.parse(data.submittedAt) < Date.parse(state.signature.signedAt))
+  const historical = state.revisions
+    .filter((r) => r.action === "classification.signed")
+    .map((r) => (r.payload as { signature: Signature }).signature)
+    .filter(
+      (s) =>
+        Date.parse(s.classifiedAt ?? s.signedAt) <=
+        Date.parse(data.submittedAt),
+    )
+    .sort(
+      (a, b) =>
+        Date.parse(a.classifiedAt ?? a.signedAt) -
+        Date.parse(b.classifiedAt ?? b.signedAt),
+    )
+    .at(-1);
+  const reportSignature =
+    data.kind === "reclassification" ? state.signature : historical;
+  const classificationAnchor =
+    data.kind === "gdpr"
+      ? state.incident.privacyAwarenessAt!
+      : data.kind === "reclassification"
+        ? (state.signature!.classifiedAt ?? state.signature!.signedAt)
+        : (reportSignature?.majorClassifiedAt ??
+          reportSignature?.classifiedAt ??
+          reportSignature?.signedAt ??
+          now);
+  if (Date.parse(data.submittedAt) < Date.parse(classificationAnchor))
     throw new Error("Submission cannot precede the signed classification");
-  if (state.receipts.some((r) => r.kind === "final"))
+  if (data.kind !== "gdpr" && state.receipts.some((r) => r.kind === "final"))
     throw new Error("The final report is already recorded");
   const initial = state.receipts.find((r) => r.kind === "initial");
   const intermediates = state.receipts.filter((r) => r.kind === "intermediate");
-  if (data.kind === "reclassification") {
-    if (state.signature.verdict !== "NOT_MAJOR" || !initial)
+  if (data.kind === "gdpr") {
+    if (state.receipts.some((r) => r.kind === "gdpr"))
+      throw new Error("A GDPR notification receipt is already recorded");
+  } else if (data.kind === "reclassification") {
+    if (state.signature!.verdict !== "NOT_MAJOR" || !initial)
       throw new Error(
         "A reclassification notice requires a previously reported incident now signed as not major",
       );
   } else {
-    if (state.signature.verdict !== "MAJOR")
-      throw new Error("A major classification is required for this report");
+    if (reportSignature?.verdict !== "MAJOR")
+      throw new Error(
+        "A major classification at the actual submission time is required for this report",
+      );
     if (data.kind === "initial" && initial)
       throw new Error("An initial notification is already recorded");
     if (data.kind === "intermediate" && !initial)
@@ -177,12 +293,31 @@ export async function recordSubmission(
     if (data.kind === "final" && !intermediates.length)
       throw new Error("Record an intermediate report first");
   }
-  const last = state.receipts.at(-1);
+  const last = state.receipts
+    .filter((r) =>
+      data.kind === "gdpr" ? r.kind === "gdpr" : r.kind !== "gdpr",
+    )
+    .at(-1);
   if (last && Date.parse(data.submittedAt) < Date.parse(last.submittedAt))
     throw new Error("Reports must be recorded in chronological order");
   if (state.receipts.some((r) => r.reference === data.reference))
     throw new Error("This authority reference is already recorded");
-  const receipt: Receipt = { ...data, actor };
+  const deadline = clocks(
+    state.incident,
+    state.signature,
+    state.receipts,
+    now,
+  ).find((c) => c.id === data.kind)?.dueAt;
+  if (
+    deadline &&
+    !(data.kind === "intermediate" && intermediates.length) &&
+    Date.parse(data.submittedAt) > Date.parse(deadline) &&
+    (data.note?.trim().length ?? 0) < 12
+  )
+    throw new Error(
+      "This submission is late. Record the delay explanation provided to the authority (at least 12 characters).",
+    );
+  const receipt: Receipt = { ...data, actor, recordedAt: now };
   return {
     ...state,
     receipts: [...state.receipts, receipt],

@@ -34,19 +34,19 @@ describe("initial notification", () => {
 describe("calendar month", () => {
   it("clamps January 31 to February 28", () =>
     expect(calendarMonth("2026-01-31T12:00:00Z", "Europe/Paris")).toBe(
-      "2026-02-28T12:00:00Z",
+      "2026-02-28T22:59:59.999Z",
     ));
   it("handles leap years", () =>
     expect(calendarMonth("2028-01-31T12:00:00Z", "Europe/Paris")).toBe(
-      "2028-02-29T12:00:00Z",
+      "2028-02-29T22:59:59.999Z",
     ));
-  it("keeps local clock time over DST", () =>
+  it("uses local end of day over DST", () =>
     expect(calendarMonth("2026-03-15T12:00:00Z", "Europe/Paris")).toBe(
-      "2026-04-15T11:00:00Z",
+      "2026-04-15T21:59:59.999Z",
     ));
   it("handles December to January", () =>
     expect(calendarMonth("2026-12-31T12:00:00Z", "Europe/Paris")).toBe(
-      "2027-01-31T12:00:00Z",
+      "2027-01-31T22:59:59.999Z",
     ));
 });
 describe("working-day extension", () => {
@@ -138,7 +138,7 @@ describe("clock stages", () => {
       },
     ];
     expect(clocks(i, s, rs, "2026-11-03T12:00:00Z")[2]!.dueAt).toBe(
-      "2026-12-02T12:00:00Z",
+      "2026-12-02T22:59:59.999Z",
     );
   });
   it("keeps first major classification on later signatures", () =>

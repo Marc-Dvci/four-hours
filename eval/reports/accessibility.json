@@ -18,5 +18,9 @@
   {
     "section": "Signature dialog",
     "violations": []
+  },
+  {
+    "section": "Report field dialog",
+    "violations": []
   }
 ]

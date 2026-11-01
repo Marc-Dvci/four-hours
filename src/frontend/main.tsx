@@ -1,13 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as client from "./client";
-import {
-  type FactKey,
-  type Incident,
-  type Criterion,
-  type Verdict,
-} from "../core/model";
-import { initialDeadline, type ReportKind } from "../core/clocks";
+import { type FactKey, type Verdict } from "../core/model";
+import { initialDeadline, nextDeadline, type ReportKind } from "../core/clocks";
+import { REPORT_DETAILS, type DetailCode } from "../core/report-details";
 import { makeIncident, serviceGraph } from "../demo/bank";
 import type { ReportField } from "../core/reports";
 import type { RecurrenceResult } from "../core/recurrence";
@@ -23,6 +19,20 @@ const LABELS: Record<Tab, string> = {
 const human = (s: string) =>
   s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 const num = new Intl.NumberFormat("en-GB");
+const BOOLEAN_FIELDS = new Set([
+  "criticalFunction",
+  "authorisedService",
+  "maliciousCriticalAccess",
+  "relevantClientsAffected",
+  "mediaCoverage",
+  "repeatedComplaints",
+  "regulatoryFailure",
+  "materialClientLoss",
+  "dataAdverseImpact",
+  "maliciousAccessPotentialLoss",
+  "personalDataBreach",
+  "gdprRiskUnlikely",
+]);
 const time = (s: string, full = false) =>
   new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/Paris",
@@ -134,7 +144,14 @@ function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [modal, setModal] = useState<
-    "sign" | "edit" | "submit" | "settings" | "create" | "context" | null
+    | "sign"
+    | "edit"
+    | "submit"
+    | "settings"
+    | "create"
+    | "context"
+    | "report-field"
+    | null
   >(null);
   const [field, setField] = useState<FactKey>("affectedClients");
   const [draftValue, setDraftValue] = useState("");
@@ -143,6 +160,10 @@ function App() {
   const [rationale, setRationale] = useState(
     "Critical payment execution is affected. Client impact, service downtime and cross-border impact exceed the recorded thresholds.",
   );
+  const [classifiedAt, setClassifiedAt] = useState("");
+  const [detailCode, setDetailCode] = useState<DetailCode>("entity-name");
+  const [detailValue, setDetailValue] = useState("");
+  const [receiptNote, setReceiptNote] = useState("");
   const [reportKind, setReportKind] = useState<ReportKind>("initial");
   const [report, setReport] = useState<ReportField[]>([]);
   const [reference, setReference] = useState("");
@@ -153,12 +174,14 @@ function App() {
   const [narrativeResult, setNarrativeResult] = useState("");
   const [project, setProject] = useState("");
   const [projects, setProjects] = useState<{ key: string; name: string }[]>([]);
+  const [officers, setOfficers] = useState("");
   const [space, setSpace] = useState("");
   const [newKey, setNewKey] = useState("");
   const [newService, setNewService] = useState("");
   const [newAwareness, setNewAwareness] = useState("");
   const [query, setQuery] = useState("");
   const [contextDraft, setContextDraft] = useState({
+    entityId: "installation-entity",
     service: "",
     serviceId: "",
     rootCause: "",
@@ -182,19 +205,21 @@ function App() {
     state && app
       ? client.clocks(state.incident, state.signature, state.receipts, app.now)
       : [];
-  const initial = currentClocks[0];
+  const active = nextDeadline(currentClocks);
+  const reportingClosed =
+    !!state?.receipts.some(
+      (r) => r.kind === "final" || r.kind === "reclassification",
+    ) && !active;
   const signedNonMajor =
     state?.signature?.verdict === "NOT_MAJOR" &&
     !state.signature.majorClassifiedAt;
   const clockDue =
-    initial?.dueAt ??
-    (incident && app
+    active?.dueAt ??
+    (!state?.signature && incident && app
       ? initialDeadline(incident.awarenessAt, app.now).dueAt
       : null);
   const remaining =
-    app && clockDue
-      ? Math.max(0, Date.parse(clockDue) - Date.parse(app.now))
-      : 0;
+    app && clockDue ? Math.abs(Date.parse(clockDue) - Date.parse(app.now)) : 0;
   const hh = Math.floor(remaining / 3600000)
     .toString()
     .padStart(2, "0");
@@ -206,7 +231,15 @@ function App() {
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const issues = (e as { issues?: { path: unknown[]; message: string }[] })
+        .issues;
+      setError(
+        issues?.length
+          ? issues.map((i) => `${i.path.join(" ")}: ${i.message}`).join(". ")
+          : e instanceof Error
+            ? e.message
+            : String(e),
+      );
     } finally {
       setBusy(false);
     }
@@ -237,13 +270,30 @@ function App() {
     setNarrativeResult("");
   }, [selected]);
   useEffect(() => {
+    setRecurrence(null);
+    setNarrativeResult("");
+  }, [row?.version]);
+  useEffect(() => {
+    let current = true;
+    setReport([]);
     if (selected && tab === "reports")
-      void task(async () =>
-        setReport(await client.getReport(selected, reportKind)),
+      void client.getReport(selected, reportKind).then(
+        (fields) => {
+          if (current) setReport(fields);
+        },
+        (failure) => {
+          if (current)
+            setError(
+              failure instanceof Error ? failure.message : String(failure),
+            );
+        },
       );
+    return () => {
+      current = false;
+    };
   }, [selected, tab, reportKind, row?.version]);
   async function mutate(
-    action: "sign" | "evidence" | "submit" | "context",
+    action: "sign" | "evidence" | "submit" | "context" | "report-field",
     payload: Record<string, unknown>,
   ) {
     if (!row) return;
@@ -275,10 +325,29 @@ function App() {
   function edit(k: FactKey) {
     if (!incident) return;
     setField(k);
-    setDraftValue(JSON.stringify(incident.facts[k].value));
+    setDraftValue(
+      incident.facts[k].value === null
+        ? ""
+        : Array.isArray(incident.facts[k].value)
+          ? (incident.facts[k].value as string[]).join(", ")
+          : String(incident.facts[k].value),
+    );
     setSource(incident.facts[k].source);
     setSourceUrl(incident.facts[k].url);
     setModal("edit");
+  }
+  function editDetail(code: DetailCode) {
+    setDetailCode(code);
+    setDetailValue(state?.reportDetails?.[code]?.value ?? "");
+    setSource(
+      state?.reportDetails?.[code]?.source ?? "Officer incident workpaper",
+    );
+    setSourceUrl(
+      state?.reportDetails?.[code]?.url ??
+        incident?.facts.criticalFunction.url ??
+        "https://demo.example/evidence",
+    );
+    setModal("report-field");
   }
   async function download() {
     const text = await client.exportWorkpaper(selected);
@@ -291,6 +360,50 @@ function App() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setNotice(
       "Workpaper exported with the evidence register and revision hashes.",
+    );
+  }
+  function downloadText(text: string, name: string, type: string) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function downloadBundle() {
+    const bundle = await client.exportEvidenceBundle(selected);
+    downloadText(
+      JSON.stringify(bundle, null, 2),
+      `four-hours-${selected.toLowerCase()}-evidence.json`,
+      "application/json",
+    );
+    setNotice(
+      `Evidence bundle exported. Retain its digest separately: ${bundle.bundleHash}`,
+    );
+  }
+  async function downloadReport() {
+    const fields = await client.getReport(selected, reportKind);
+    downloadText(
+      JSON.stringify(
+        {
+          format: "four-hours.report-draft.v1",
+          incident: selected,
+          kind: reportKind,
+          preparedAt: app!.now,
+          classificationCurrent: Boolean(state?.signature && !stale),
+          missing: fields
+            .filter((f) => f.value === "Evidence required")
+            .map((f) => f.label),
+          fields,
+        },
+        null,
+        2,
+      ),
+      `four-hours-${selected.toLowerCase()}-${reportKind}-draft.json`,
+      "application/json",
+    );
+    setNotice(
+      "Working draft exported. Review the listed gaps and the competent authority’s current form.",
     );
   }
   const filtered =
@@ -337,9 +450,13 @@ function App() {
             onClick={() => {
               setModal("settings");
               if (client.isForge)
-                void task(async () =>
-                  setProjects(await client.forgeCall("projects")),
-                );
+                void task(async () => {
+                  setProjects(await client.forgeCall("projects"));
+                  const settings = await client.forgeCall<{
+                    officers: string[];
+                  }>("settings");
+                  setOfficers(settings.officers.join("\n"));
+                });
             }}
           >
             ⚙
@@ -463,9 +580,13 @@ function App() {
               onClick={() => {
                 setModal("settings");
                 if (client.isForge)
-                  void task(async () =>
-                    setProjects(await client.forgeCall("projects")),
-                  );
+                  void task(async () => {
+                    setProjects(await client.forgeCall("projects"));
+                    const settings = await client.forgeCall<{
+                      officers: string[];
+                    }>("settings");
+                    setOfficers(settings.officers.join("\n"));
+                  });
               }}
             >
               Set up the incident desk <Arrow />
@@ -502,6 +623,7 @@ function App() {
                     className="text-button"
                     onClick={() => {
                       setContextDraft({
+                        entityId: incident.entityId,
                         service: incident.service,
                         serviceId: incident.serviceId,
                         rootCause: incident.rootCause,
@@ -521,54 +643,74 @@ function App() {
                   </button>
                 </p>
               </div>
-              <button
-                className="secondary"
-                disabled={busy}
-                onClick={() => void task(download)}
-              >
-                Export workpaper <Arrow />
-              </button>
+              <div className="heading-actions">
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => void task(downloadBundle)}
+                >
+                  Evidence bundle <Arrow />
+                </button>
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => void task(download)}
+                >
+                  Export workpaper <Arrow />
+                </button>
+              </div>
             </section>
             <section
-              className={`clock-band ${initial?.status === "overdue" ? "overdue" : ""}`}
+              className={`clock-band ${active?.status === "overdue" ? "overdue" : ""}`}
               aria-label="Reporting deadlines"
             >
               <div className="clock-main">
                 <span className="eyebrow">
-                  {signedNonMajor
-                    ? "SIGNED · NOT MAJOR"
-                    : state?.signature
-                      ? initial?.status === "submitted"
-                        ? "INITIAL RECEIPT RECORDED"
-                        : "INITIAL NOTIFICATION DUE"
-                      : "ON MAJOR CLASSIFICATION"}
+                  {active
+                    ? active.label.toUpperCase() +
+                      (active.status === "overdue" ? " OVERDUE" : " DUE")
+                    : reportingClosed
+                      ? "REPORTING CLOSED"
+                      : signedNonMajor
+                        ? "SIGNED / NOT MAJOR"
+                        : "ON MAJOR CLASSIFICATION"}
                 </span>
                 <div className="clock-digits">
-                  {signedNonMajor ? (
-                    <span className="clock-recorded">N/A</span>
-                  ) : initial?.status === "submitted" ? (
+                  {reportingClosed || (signedNonMajor && !active) ? (
                     <span className="clock-recorded">
-                      {time(initial.submittedAt!)}
+                      {reportingClosed ? "DONE" : "N/A"}
                     </span>
                   ) : (
                     <>
-                      {hh}
-                      <span>:</span>
-                      {mm.toString().padStart(2, "0")}
-                      <small>{state?.signature ? "REMAINING" : "WINDOW"}</small>
+                      {Number(hh) >= 100 ? (
+                        <span className="clock-days">
+                          {Math.floor(Number(hh) / 24)}d {Number(hh) % 24}h
+                        </span>
+                      ) : (
+                        <>
+                          {hh}
+                          <span>:</span>
+                          {mm.toString().padStart(2, "0")}
+                        </>
+                      )}
+                      <small>
+                        {active?.status === "overdue"
+                          ? "OVERDUE BY"
+                          : state?.signature
+                            ? "REMAINING"
+                            : "WINDOW"}
+                      </small>
                     </>
                   )}
                 </div>
                 <span className="clock-caption">
-                  {signedNonMajor
-                    ? "Monitoring and recurrence review remain open"
-                    : state?.signature
-                      ? initial?.status === "submitted"
-                        ? `Authority reference: ${state.receipts.find((r) => r.kind === "initial")?.reference}`
-                        : clockDue
-                          ? `Due ${time(clockDue, true)} Paris`
-                          : "Awaiting major classification"
-                      : "Sign the classification to record the deadline"}
+                  {active
+                    ? `Due ${time(active.dueAt!, true)} Paris`
+                    : reportingClosed
+                      ? "DORA reporting closed; the privacy workflow is tracked separately"
+                      : signedNonMajor
+                        ? "Monitoring and recurrence review remain open"
+                        : "Record the actual classification time when signing"}
                 </span>
               </div>
               <div className="clock-rule">
@@ -590,30 +732,36 @@ function App() {
                 </a>
               </div>
               <div className="next-clocks">
-                {currentClocks.slice(1).map((c) => (
-                  <div key={c.id}>
-                    <span>{c.label}</span>
-                    <strong>
-                      {c.dueAt
-                        ? time(c.dueAt, true)
-                        : c.id === "intermediate"
-                          ? "+72 hours"
-                          : c.id === "final"
-                            ? "+1 month"
-                            : "Assess breach"}
-                    </strong>
-                    <small>
-                      {c.status === "waiting"
-                        ? "After " +
-                          (c.id === "final"
-                            ? "latest intermediate report"
-                            : c.id === "intermediate"
-                              ? "initial submission"
-                              : "privacy assessment")
-                        : c.status.toUpperCase()}
-                    </small>
-                  </div>
-                ))}
+                {currentClocks
+                  .filter((c) =>
+                    active ? c.id !== active.id : c.id !== "initial",
+                  )
+                  .map((c) => (
+                    <div key={c.id}>
+                      <span>{c.label}</span>
+                      <strong>
+                        {c.dueAt
+                          ? time(c.dueAt, true)
+                          : c.id === "intermediate"
+                            ? "+72 hours"
+                            : c.id === "final"
+                              ? "+1 month"
+                              : "Assess breach"}
+                      </strong>
+                      <small>
+                        {c.status === "waiting"
+                          ? "After " +
+                            (c.id === "final"
+                              ? "latest intermediate report"
+                              : c.id === "intermediate"
+                                ? "initial submission"
+                                : "privacy assessment")
+                          : c.late
+                            ? "SUBMITTED LATE"
+                            : c.status.toUpperCase()}
+                      </small>
+                    </div>
+                  ))}
               </div>
             </section>
             <div className="journey" aria-label="Incident progress">
@@ -680,6 +828,14 @@ function App() {
                 preserved.
               </div>
             )}
+            {Date.parse(app!.now) - Date.parse(incident.assessedAt) >
+              3600000 && (
+              <div className="message warning">
+                This assessment is more than one hour old. Check duration,
+                downtime and changing impact before relying on the recorded
+                decision.
+              </div>
+            )}
             {tab === "classification" && (
               <div className="classification-layout">
                 <section className="criteria">
@@ -691,6 +847,34 @@ function App() {
                     <span className="criteria-counter">
                       <strong>{assessment.metGroups}</strong> of 6 groups met
                     </span>
+                  </div>
+                  <div className="observation-actions">
+                    <span>
+                      Evidence assessed {time(incident.assessedAt, true)} Paris
+                    </span>
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() =>
+                        void task(async () => {
+                          if (!client.isForge) {
+                            setNotice(
+                              "The replay contains synthetic observations. In Forge, this action imports the incident structured four-hours-observations property.",
+                            );
+                            return;
+                          }
+                          await client.forgeCall("refreshJiraObservations", {
+                            key: selected,
+                          });
+                          await refresh();
+                          setNotice(
+                            "Jira observations imported as a single evidence revision. Review the assessment.",
+                          );
+                        })
+                      }
+                    >
+                      Import Jira observations <Arrow />
+                    </button>
                   </div>
                   <div className="criterion-columns">
                     <span>CRITERION / THRESHOLD</span>
@@ -812,7 +996,12 @@ function App() {
                     </div>
                     <div>
                       <span>Decision owner</span>
-                      <strong>{app?.displayName}</strong>
+                      <strong>
+                        {state?.signature?.actor &&
+                        state.signature.actor !== app?.actor
+                          ? state.signature.actor
+                          : app?.displayName}
+                      </strong>
                     </div>
                   </div>
                   {state?.signature && !stale ? (
@@ -831,6 +1020,7 @@ function App() {
                       }
                       onClick={() => {
                         setRationale(assessment.explanation);
+                        setClassifiedAt(isoLocal(app!.now));
                         setModal("sign");
                       }}
                     >
@@ -875,41 +1065,28 @@ function App() {
                           recurrence.assessment?.verdict === "MAJOR" && (
                             <button
                               className="secondary"
+                              disabled={busy || !!app?.boundKey}
                               onClick={() =>
                                 void task(async () => {
-                                  for (const k of [
-                                    "economicImpact",
-                                    "memberStates",
-                                  ] as const) {
-                                    const current = await client.bootstrap();
-                                    const latest = current.records.find(
-                                      (r) => r.data.incident.id === selected,
-                                    )!;
-                                    await client.mutation(
-                                      selected,
-                                      latest.version,
-                                      "evidence",
-                                      {
-                                        field: k,
-                                        value:
-                                          recurrence.aggregated!.facts[k].value,
-                                        source:
-                                          recurrence.aggregated!.facts[k]
-                                            .source,
-                                        url: incident.facts[k].url,
-                                      },
-                                    );
-                                  }
+                                  const group =
+                                    await client.createCollective(selected);
                                   await refresh();
+                                  setSelected(group.data.incident.id);
                                   setNotice(
-                                    "Combined recurring evidence recorded. Review and sign the assessment.",
+                                    "Collective incident created. The individual source records remain unchanged.",
                                   );
                                 })
                               }
                             >
-                              Use combined evidence
+                              Create collective incident
                             </button>
                           )}
+                        {app?.boundKey && (
+                          <p>
+                            Open the global incident desk to create a collective
+                            record.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -929,7 +1106,8 @@ function App() {
                       : "SERVICE CONTEXT"}
                   </span>
                 </div>
-                {incident.synthetic ? (
+                {incident.synthetic &&
+                incident.serviceId === "urgent-payments" ? (
                   <>
                     <div className="service-map">
                       <div className="map-lane">
@@ -1086,10 +1264,18 @@ function App() {
                   </div>
                   <button
                     className="primary"
-                    disabled={busy || !state?.signature || stale}
+                    disabled={
+                      busy ||
+                      (reportKind === "gdpr"
+                        ? incident.facts.personalDataBreach.value !== true ||
+                          incident.facts.gdprRiskUnlikely.value !== false ||
+                          !incident.privacyAwarenessAt
+                        : !state?.signature || stale)
+                    }
                     onClick={() => {
                       setSubmitted(isoLocal(app!.now));
                       setReference("");
+                      setReceiptNote("");
                       setModal("submit");
                     }}
                   >
@@ -1108,6 +1294,7 @@ function App() {
                     <option value="initial">Initial notification</option>
                     <option value="intermediate">Intermediate report</option>
                     <option value="final">Final report</option>
+                    <option value="gdpr">GDPR notification</option>
                     <option value="reclassification">
                       Reclassification notice
                     </option>
@@ -1159,6 +1346,26 @@ function App() {
                       : "Not recorded; set it in incident context"}
                   </small>
                 </div>
+                <div className="report-readiness">
+                  <strong>
+                    {
+                      report.filter((f) => f.value === "Evidence required")
+                        .length
+                    }{" "}
+                    fields need evidence
+                  </strong>
+                  <span>
+                    Working draft checklist. Conditional ITS fields and the
+                    authority’s form require officer review.
+                  </span>
+                  <button
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => void task(downloadReport)}
+                  >
+                    Export report draft <Arrow />
+                  </button>
+                </div>
                 <table className="report-table">
                   <thead>
                     <tr>
@@ -1178,7 +1385,29 @@ function App() {
                         >
                           {f.value}
                         </td>
-                        <td>{f.citations.join(" · ")}</td>
+                        <td>
+                          {f.citations.join(" · ")}
+                          {f.sourceUrls?.map((url) => (
+                            <a
+                              className="source-link"
+                              key={url}
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open source ↗
+                            </a>
+                          ))}
+                          {REPORT_DETAILS.some((d) => d.code === f.code) && (
+                            <button
+                              className="edit-fact"
+                              aria-label={`Edit report field ${f.label}`}
+                              onClick={() => editDetail(f.code as DetailCode)}
+                            >
+                              Edit field
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1246,9 +1475,14 @@ function App() {
                   <span
                     className={`chain-status ${row?.chainValid ? "" : "invalid"}`}
                   >
-                    {row?.chainValid ? "✓ CHAIN VERIFIED" : "CHAIN INVALID"}
+                    {row?.chainValid ? "✓ CHAIN CONSISTENT" : "CHAIN INVALID"}
                   </span>
                 </div>
+                <p className="small-note">
+                  This checks recorded state and revision consistency. Retain
+                  the exported bundle digest separately for independent
+                  comparison; a hash alone does not establish signer identity.
+                </p>
                 <div className="hash-row">
                   <span>Current evidence · SHA-256</span>
                   <code>{row?.evidenceHash}</code>
@@ -1354,6 +1588,22 @@ function App() {
               );
             }}
           >
+            <label htmlFor="context-entity-id">
+              Financial entity identifier
+            </label>
+            <input
+              id="context-entity-id"
+              value={contextDraft.entityId}
+              maxLength={100}
+              required
+              onChange={(e) =>
+                setContextDraft({ ...contextDraft, entityId: e.target.value })
+              }
+            />
+            <p className="small-note">
+              Use the same stable identifier only for incidents belonging to the
+              same financial entity. Recurrence is scoped to this identifier.
+            </p>
             <label htmlFor="context-service">Affected service</label>
             <input
               id="context-service"
@@ -1484,6 +1734,68 @@ function App() {
           </form>
         </Modal>
       )}
+      {modal === "report-field" && (
+        <Modal
+          error={error}
+          title={
+            REPORT_DETAILS.find((d) => d.code === detailCode)?.label ??
+            "Report evidence"
+          }
+          onClose={() => setModal(null)}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void task(() =>
+                mutate("report-field", {
+                  code: detailCode,
+                  value: detailValue,
+                  source,
+                  url: sourceUrl,
+                }),
+              );
+            }}
+          >
+            <label htmlFor="detail-value">Recorded report field</label>
+            <textarea
+              id="detail-value"
+              value={detailValue}
+              onChange={(e) => setDetailValue(e.target.value)}
+              maxLength={4000}
+              rows={4}
+              required
+            />
+            <label htmlFor="detail-source">Evidence source</label>
+            <input
+              id="detail-source"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              minLength={3}
+              required
+            />
+            <label htmlFor="detail-url">Evidence URL</label>
+            <input
+              id="detail-url"
+              type="url"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              required
+            />
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setModal(null)}
+              >
+                Cancel
+              </button>
+              <button className="primary" disabled={busy}>
+                Save report field
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
       {modal === "sign" && incident && assessment && (
         <Modal
           error={error}
@@ -1493,7 +1805,12 @@ function App() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void task(() => mutate("sign", { rationale }));
+              void task(() =>
+                mutate("sign", {
+                  rationale,
+                  classifiedAt: new Date(classifiedAt).toISOString(),
+                }),
+              );
             }}
           >
             <div className="sign-summary">
@@ -1502,6 +1819,17 @@ function App() {
                 {incident.id} · {assessment.metGroups} materiality groups met
               </p>
             </div>
+            <label htmlFor="actual-classification">
+              Actual classification time (
+              {Intl.DateTimeFormat().resolvedOptions().timeZone})
+            </label>
+            <input
+              id="actual-classification"
+              type="datetime-local"
+              value={classifiedAt}
+              onChange={(e) => setClassifiedAt(e.target.value)}
+              required
+            />
             <label htmlFor="rationale">Classification rationale</label>
             <textarea
               id="rationale"
@@ -1543,7 +1871,17 @@ function App() {
               void task(async () => {
                 let value: unknown;
                 try {
-                  value = JSON.parse(draftValue);
+                  value =
+                    !draftValue.trim() || draftValue === "null"
+                      ? null
+                      : BOOLEAN_FIELDS.has(field)
+                        ? draftValue === "true"
+                        : field === "memberStates"
+                          ? draftValue
+                              .toUpperCase()
+                              .split(/[,;\s]+/)
+                              .filter(Boolean)
+                          : Number(draftValue);
                 } catch {
                   throw new Error(
                     "Enter a valid value: number, true, false, null, or a country-code array",
@@ -1559,15 +1897,30 @@ function App() {
             }}
           >
             <label htmlFor="fact-value">Recorded value</label>
-            <input
-              id="fact-value"
-              value={draftValue}
-              onChange={(e) => setDraftValue(e.target.value)}
-              required
-            />
+            {BOOLEAN_FIELDS.has(field) ? (
+              <select
+                id="fact-value"
+                value={draftValue}
+                onChange={(e) => setDraftValue(e.target.value)}
+              >
+                <option value="">Unknown</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            ) : (
+              <input
+                id="fact-value"
+                value={draftValue}
+                onChange={(e) => setDraftValue(e.target.value)}
+                inputMode={field === "memberStates" ? "text" : "decimal"}
+                placeholder={
+                  field === "memberStates" ? "FR, DE, NL" : "Unknown"
+                }
+              />
+            )}
             <p className="small-note">
-              Use null for unknown. Boolean: true or false. Countries:
-              ["FR","DE"].
+              Leave the value empty when unknown. Country codes are separated by
+              commas. The evidence source is recorded below.
             </p>
             <label htmlFor="fact-source">Evidence source</label>
             <input
@@ -1620,6 +1973,7 @@ function App() {
                     kind: reportKind,
                     submittedAt: new Date(submitted).toISOString(),
                     reference,
+                    ...(receiptNote.trim() ? { note: receiptNote.trim() } : {}),
                   },
                 }),
               );
@@ -1635,6 +1989,7 @@ function App() {
               <option value="initial">Initial notification</option>
               <option value="intermediate">Intermediate report</option>
               <option value="final">Final report</option>
+              <option value="gdpr">GDPR notification</option>
               <option value="reclassification">Reclassification notice</option>
             </select>
             <label htmlFor="submitted-at">
@@ -1663,6 +2018,16 @@ function App() {
             <p className="small-note">
               This receipt anchors the next applicable reporting clock.
             </p>
+            <label htmlFor="receipt-note">
+              Submission context or delay explanation
+            </label>
+            <textarea
+              id="receipt-note"
+              value={receiptNote}
+              onChange={(e) => setReceiptNote(e.target.value)}
+              maxLength={2000}
+              rows={3}
+            />
             <div className="dialog-actions">
               <button
                 type="button"
@@ -1717,6 +2082,34 @@ function App() {
                 }
               >
                 Load demo bank
+              </button>
+              <hr />
+              <h3>Risk officers</h3>
+              <label htmlFor="risk-officers">
+                Authorised Atlassian account IDs, one per line
+              </label>
+              <textarea
+                id="risk-officers"
+                value={officers}
+                onChange={(e) => setOfficers(e.target.value)}
+                rows={3}
+              />
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() =>
+                  void task(async () => {
+                    await client.forgeCall("saveOfficers", {
+                      officers: officers.split(/\s+/).filter(Boolean),
+                    });
+                    setNotice(
+                      "Risk officer permissions saved. Jira issue access still applies.",
+                    );
+                    setModal(null);
+                  })
+                }
+              >
+                Save risk officers
               </button>
               <hr />
               <h3>Confluence workpaper</h3>

@@ -18,9 +18,11 @@
     "eval": "tsx eval/run.ts",
     "test:browser": "playwright test",
     "manifest": "node scripts/manifest.cjs",
-    "audit": "npm run typecheck && npm test && npm run eval && npm run build && npm run manifest",
+    "audit": "npm run typecheck && npm test && npm run eval && npm run eval:oracle && npm run build && npm run manifest",
     "format": "prettier --write src tests e2e eval/run.ts *.ts *.json manifest.yml",
-    "deploy:forge": "tsx scripts/deploy.ts"
+    "deploy:forge": "tsx scripts/deploy.ts",
+    "eval:oracle": "tsx eval/oracle.ts",
+    "verify:bundle": "node scripts/verify-bundle.mjs"
   },
   "dependencies": {
     "@forge/api": "8.4.0",

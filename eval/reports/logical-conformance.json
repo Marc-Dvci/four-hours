@@ -1,0 +1,12 @@
+{
+  "cases": 6561,
+  "correct": 6561,
+  "failures": [],
+  "method": "Exhaustive truth completion over eight three-valued inputs representing the critical gateway, special route and materiality groups. Logical conformance, not independent legal or production validation.",
+  "latency": {
+    "unit": "milliseconds per classification",
+    "p50": 0.07119999999997617,
+    "p95": 0.11920000000009168,
+    "runtime": "v24.22.1"
+  }
+}

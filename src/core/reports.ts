@@ -1,12 +1,15 @@
 import { classify } from "./classify";
-import { hash, verify, type RecordState } from "./ledger";
+import { hash, signatureCurrent, type RecordState } from "./ledger";
 import type { ReportKind } from "./clocks";
+import { detailsFor } from "./report-details";
+import { verifyRecord } from "./integrity";
 
 export type ReportField = {
   code: string;
   label: string;
   value: string;
   citations: string[];
+  sourceUrls?: string[];
 };
 export function reportFields(
   state: RecordState,
@@ -25,6 +28,13 @@ export function reportFields(
     label,
     value: value === null ? "Evidence required" : String(value),
     citations,
+    sourceUrls: [
+      ...new Set(
+        Object.values(f)
+          .filter((fact) => citations.includes(fact.source))
+          .map((fact) => fact.url),
+      ),
+    ],
   });
   const result = [
     field("incident-reference", "Incident reference", i.id, ["Jira work item"]),
@@ -35,17 +45,22 @@ export function reportFields(
     field(
       "classification-time",
       "Major classification time",
-      state.signature?.majorClassifiedAt ?? state.signature?.signedAt ?? null,
+      state.signature?.majorClassifiedAt ??
+        state.signature?.classifiedAt ??
+        state.signature?.signedAt ??
+        null,
       ["Signed classification"],
     ),
-    field("description", "Incident description", i.title, ["Jira summary"]),
+    field("description", "Jira summary", i.title, ["Jira summary"]),
     field("services", "Affected service", i.service, [
       f.criticalFunction.source,
     ]),
     field(
       "classification",
       "Classification",
-      state.signature?.verdict ?? a.verdict,
+      state.signature && !signatureCurrent(state)
+        ? "REVIEW REQUIRED: evidence changed"
+        : (state.signature?.verdict ?? a.verdict),
       [
         "2024/1772 Art. 8",
         ...a.criteria.filter((c) => c.met).map((c) => c.reference),
@@ -70,18 +85,69 @@ export function reportFields(
       f.durationMinutes.source,
     ]),
   ];
-  if (kind === "intermediate" || kind === "final")
+  if (kind === "gdpr") {
+    const privacy = [
+      field("incident-reference", "Incident reference", i.id, [
+        "Incident record",
+      ]),
+      field(
+        "privacy-awareness",
+        "Personal-data-breach awareness",
+        i.privacyAwarenessAt,
+        ["Privacy assessment"],
+      ),
+    ];
+    for (const definition of detailsFor(kind)) {
+      const entry = state.reportDetails?.[definition.code];
+      privacy.push({
+        ...field(definition.code, definition.label, entry?.value ?? null, [
+          definition.reference,
+          ...(entry ? [entry.source] : []),
+        ]),
+        sourceUrls: entry ? [entry.url] : [],
+      });
+    }
+    return privacy;
+  }
+  if (kind === "intermediate" || kind === "final") {
+    result.push(
+      field("occurred-at", "Incident occurrence", i.occurredAt, [
+        "Incident context",
+      ]),
+    );
+    result.push(
+      field(
+        "authority-reference",
+        "Authority incident reference",
+        state.receipts.find((r) => r.kind === "initial")?.reference ??
+          "Not yet recorded",
+        ["Initial submission receipt"],
+      ),
+    );
     result.push(
       field("root-cause", "Apparent root cause", i.rootCause, [
         "Incident investigation",
       ]),
     );
-  if (kind === "final")
-    result.push(
-      field("remediation", "Remediation and preventive action", null, [
-        "Officer review required",
+  }
+  result.push(
+    field("entity-type", "Deadline policy entity class", i.entity, [
+      "Incident context",
+    ]),
+    field("currency", "Monetary impact currency", "EUR", [
+      "All impact inputs are in EUR",
+    ]),
+  );
+  for (const definition of detailsFor(kind)) {
+    const entry = state.reportDetails?.[definition.code];
+    result.push({
+      ...field(definition.code, definition.label, entry?.value ?? null, [
+        definition.reference,
+        ...(entry ? [entry.source] : []),
       ]),
-    );
+      sourceUrls: entry ? [entry.url] : [],
+    });
+  }
   return result;
 }
 export function validateNarrative(
@@ -124,7 +190,7 @@ export function validateNarrative(
 }
 export async function workpaper(state: RecordState): Promise<string> {
   const a = classify(state.incident);
-  const intact = await verify(state.revisions);
+  const intact = await verifyRecord(state);
   const evidenceHash = await hash(state.incident);
   const rows = a.criteria
     .map(
@@ -135,8 +201,15 @@ export async function workpaper(state: RecordState): Promise<string> {
   const evidence = Object.entries(state.incident.facts)
     .map(
       ([k, f]) =>
-        `| ${k} | ${JSON.stringify(f.value)} | ${f.quality} | ${f.source.replace(/\|/g, "/")} | ${f.observedAt} |`,
+        `| ${k} | ${JSON.stringify(f.value)} | ${f.quality} | ${f.source.replace(/\|/g, "/")} | ${f.observedAt} | ${f.url} |`,
     )
     .join("\n");
-  return `# Four Hours · ${state.incident.id}\n\n${state.incident.title}\n\n${state.incident.synthetic ? "Synthetic replay evidence." : "Live incident evidence."}\n\n## Classification\n\n${a.verdict}. ${a.explanation}\n\nRule version: ${a.ruleVersion}\n\n| Criterion | Result | Reference |\n|---|---|---|\n${rows}\n\n## Signature\n\n${state.signature ? `${state.signature.actor} · ${state.signature.signedAt}\n\n${state.signature.rationale}` : "Awaiting officer signature."}\n\nEvidence SHA-256: ${evidenceHash}\n\nSignature current: ${state.signature?.evidenceHash === evidenceHash}\n\n## Evidence register\n\n| Field | Value | Quality | Source | Observed at |\n|---|---|---|---|---|\n${evidence}\n\n## Submission receipts\n\n${state.receipts.map((r) => `- ${r.kind}: ${r.submittedAt} · ${r.reference} · ${r.actor}`).join("\n") || "No receipt recorded."}\n\n## Revision chain\n\nVerification: ${intact ? "VALID" : "INVALID"}. ${state.revisions.length} revisions.\n\n${state.revisions.map((r) => `${r.sequence}. ${r.at} · ${r.action} · ${r.actor}\n   SHA-256: ${r.hash}\n   Previous: ${r.previousHash}`).join("\n")}\n\n## Review\n\nAn officer reviews the report against the competent authority's current submission form. Report preparation and submission receipts are recorded separately.\n`;
+  return `# Four Hours · ${state.incident.id}\n\n${state.incident.title}\n\n${state.incident.synthetic ? "Synthetic replay evidence." : "Live incident evidence."}\n\n## Classification\n\n${a.verdict}. ${a.explanation}\n\nRule version: ${a.ruleVersion}\n\n| Criterion | Result | Reference |\n|---|---|---|\n${rows}\n\n## Signature\n\n${state.signature ? `${state.signature.actor} · ${state.signature.signedAt}\n\n${state.signature.rationale}` : "Awaiting officer signature."}\n\nEvidence SHA-256: ${evidenceHash}\n\nSignature current: ${state.signature?.evidenceHash === evidenceHash}\n\n## Evidence register\n\n| Field | Value | Quality | Source | Observed at | URL |\n|---|---|---|---|---|---|\n${evidence}\n\n## Report preparation fields\n\n${
+    Object.entries(state.reportDetails ?? {})
+      .map(
+        ([code, f]) =>
+          `- ${code}: ${f.value} | ${f.source} | ${f.url} | ${f.observedAt}`,
+      )
+      .join("\n") || "No additional report fields recorded."
+  }\n\n## Collective evidence\n\n${state.recurrence ? state.recurrence.memberIds.join(" + ") : "Individual incident."}\n\n## Submission receipts\n\n${state.receipts.map((r) => `- ${r.kind}: ${r.submittedAt} · ${r.reference} · ${r.actor}`).join("\n") || "No receipt recorded."}\n\n## Revision chain\n\nInternal state and chain consistency: ${intact ? "VALID" : "INVALID"}. ${state.revisions.length} revisions.\n\n${state.revisions.map((r) => `${r.sequence}. ${r.at} · ${r.action} · ${r.actor}\n   SHA-256: ${r.hash}\n   Previous: ${r.previousHash}`).join("\n")}\n\n## Review\n\nAn officer reviews the report against the competent authority's current submission form. Report preparation and submission receipts are recorded separately.\n`;
 }

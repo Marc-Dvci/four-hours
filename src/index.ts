@@ -1,9 +1,14 @@
 import Resolver from "@forge/resolver";
 import { updateContext } from "./core/context";
+import { updateEvidence } from "./core/evidence";
+import { verifyRecord } from "./core/integrity";
+import { evidenceBundle } from "./core/bundle";
+import { updateReportDetail } from "./core/report-details";
+import { refreshJiraObservations } from "./forge/observations";
 import api, { route } from "@forge/api";
 import { kvs } from "@forge/kvs";
 import { z } from "zod";
-import { incidentSchema, type FactKey } from "./core/model";
+import { incidentSchema } from "./core/model";
 import { classify } from "./core/classify";
 import { clocks } from "./core/clocks";
 import {
@@ -11,10 +16,10 @@ import {
   hash,
   sign,
   recordSubmission,
-  verify,
+  assertOpen,
   type RecordState,
 } from "./core/ledger";
-import { recurring } from "./core/recurrence";
+import { recurring, collectiveCase } from "./core/recurrence";
 import { reportFields, validateNarrative, workpaper } from "./core/reports";
 import { demoIncidents } from "./demo/bank";
 import {
@@ -27,16 +32,45 @@ import {
   type RequestContext,
 } from "./forge/access";
 import * as store from "./forge/store";
+import { accessiblePopulation } from "./forge/population";
+import { UnavailableIncident } from "./forge/access";
 import { syncServices, serviceEvidence } from "./forge/graph";
 import { publishWorkpaper } from "./forge/confluence";
 export { onConnectionChange } from "./forge/graph";
 
 const resolver = new Resolver();
 type Req = { payload: Record<string, unknown>; context: RequestContext };
+resolver.define("settings", async (req: Req) => {
+  await admin(req.context);
+  return { officers: (await kvs.get<string[]>("fh:officers")) ?? [] };
+});
+resolver.define("saveOfficers", async (req: Req) => {
+  await admin(req.context);
+  const officers = [
+    ...new Set(
+      z
+        .array(z.string().trim().min(3).max(150))
+        .max(20)
+        .parse(req.payload.officers),
+    ),
+  ];
+  for (const id of officers) {
+    const user = await api
+      .asUser()
+      .requestJira(route`/rest/api/3/user?accountId=${id}`);
+    if (!user.ok)
+      throw new Error(
+        "One of the account IDs is not a readable Atlassian user",
+      );
+  }
+  await kvs.set("fh:officers", officers);
+  return { saved: officers.length };
+});
 async function load(key: string, context: RequestContext) {
   await readable(key, context);
   const stored = await store.read(key);
-  if (!stored) throw new Error("Set up this incident in Four Hours first");
+  if (!stored)
+    throw new UnavailableIncident("Set up this incident in Four Hours first");
   return stored;
 }
 async function view(key: string, context: RequestContext) {
@@ -51,20 +85,16 @@ async function view(key: string, context: RequestContext) {
       new Date().toISOString(),
     ),
     evidenceHash: await hash(stored.data.incident),
-    chainValid: await verify(stored.data.revisions),
+    chainValid: await verifyRecord(stored.data),
   };
 }
 resolver.define("bootstrap", async (req: Req) => {
   const who = actor(req.context);
   const bound = req.context.extension?.issue?.key;
-  const records = [];
-  for (const key of bound ? [bound] : await store.keys()) {
-    try {
-      records.push(await view(key, req.context));
-    } catch {
-      /* A population never reveals an inaccessible record. */
-    }
-  }
+  const records = await accessiblePopulation(
+    bound ? [bound] : await store.keys(),
+    (key) => view(key, req.context),
+  );
   const me = await api.asUser().requestJira(route`/rest/api/3/myself`);
   const profile = me.ok
     ? ((await me.json()) as { displayName: string })
@@ -160,7 +190,13 @@ resolver.define("loadDemo", async (req: Req) => {
         incident: incidentSchema.parse(incident),
         signature: null,
         receipts: [],
-        revisions: [],
+        revisions: await append(
+          [],
+          actor(req.context),
+          "incident.created",
+          incident,
+          incident.assessedAt,
+        ),
       };
       await store.save(key, data, 0);
     }
@@ -205,10 +241,10 @@ resolver.define("mutate", async (req: Req) => {
     z.number().int().nonnegative().parse(req.payload.version) !== stored.version
   )
     throw new Error("Refresh this incident before saving");
-  if (!(await verify(stored.data.revisions)))
+  if (!(await verifyRecord(stored.data)))
     throw new Error("The evidence chain is invalid");
   const action = z
-    .enum(["sign", "submit", "evidence", "context"])
+    .enum(["sign", "submit", "evidence", "context", "report-field"])
     .parse(req.payload.action);
   const now = new Date().toISOString();
   const who = actor(req.context);
@@ -227,6 +263,9 @@ resolver.define("mutate", async (req: Req) => {
       who,
       z.string().max(2000).parse(req.payload.rationale),
       now,
+      req.payload.classifiedAt
+        ? z.string().parse(req.payload.classifiedAt)
+        : now,
     );
   } else if (action === "submit") {
     next = await recordSubmission(
@@ -237,56 +276,80 @@ resolver.define("mutate", async (req: Req) => {
     );
   } else if (action === "context") {
     next = await updateContext(stored.data, req.payload.context, who, now);
-  } else {
-    const field = z.string().parse(req.payload.field) as FactKey;
-    if (!(field in stored.data.incident.facts))
-      throw new Error("Unknown evidence field");
-    const incident = structuredClone(stored.data.incident);
-    incident.assessedAt = now;
-    (incident.facts[field] as { value: unknown }).value = req.payload.value;
-    incident.facts[field].source = z
-      .string()
-      .trim()
-      .min(3)
-      .max(200)
-      .parse(req.payload.source);
-    incident.facts[field].url = z.string().url().parse(req.payload.url);
-    incident.facts[field].observedAt = now;
-    incident.facts[field].quality = incident.synthetic
-      ? "synthetic"
-      : "attested";
-    incidentSchema.parse(incident);
-    next = {
-      ...stored.data,
-      incident,
-      revisions: await append(
-        stored.data.revisions,
-        who,
-        "evidence.updated",
-        { field, fact: incident.facts[field] },
-        now,
-      ),
-    };
-  }
+  } else if (action === "report-field")
+    next = await updateReportDetail(stored.data, req.payload, who, now);
+  else next = await updateEvidence(stored.data, req.payload, who, now);
   await store.save(key, next, stored.version);
   return view(key, req.context);
 });
+async function recurrenceCandidates(context: RequestContext) {
+  const records = await accessiblePopulation(await store.keys(), (key) =>
+    load(key, { ...context, extension: undefined }),
+  );
+  return records.filter((r) => !r.data.recurrence).map((r) => r.data.incident);
+}
 resolver.define("recurrence", async (req: Req) => {
   const key = issueKey.parse(req.payload.key);
   const stored = await load(key, req.context);
-  const candidates = [];
-  for (const k of await store.keys()) {
-    try {
-      candidates.push((await load(k, req.context)).data.incident);
-    } catch {}
-  }
+  const candidates = await recurrenceCandidates(req.context);
   return recurring(stored.data.incident, candidates);
+});
+resolver.define("createCollective", async (req: Req) => {
+  if (req.context.extension?.issue)
+    throw new Error(
+      "Open the global incident desk to create a collective incident",
+    );
+  const key = issueKey.parse(req.payload.key);
+  const current = await load(key, req.context);
+  await editable(key, req.context);
+  const candidates = await recurrenceCandidates(req.context);
+  const group = recurring(current.data.incident, candidates);
+  if (!group.aggregated)
+    throw new Error("No qualifying recurring group is available");
+  const marker = `fh:collective:${await hash([...group.incidentIds].sort())}`;
+  const prior = await kvs.get<string>(marker);
+  if (prior) return view(prior, req.context);
+  const issueResponse = await api
+    .asUser()
+    .requestJira(route`/rest/api/3/issue/${key}?fields=project,issuetype`);
+  if (!issueResponse.ok)
+    throw new Error("Source incident metadata is unavailable");
+  const issue = (await issueResponse.json()) as {
+    fields: { project: { id: string }; issuetype: { id: string } };
+  };
+  const response = await api.asUser().requestJira(route`/rest/api/3/issue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fields: {
+        project: { id: issue.fields.project.id },
+        issuetype: { id: issue.fields.issuetype.id },
+        summary: `[Four Hours collective] ${group.incidentIds.join(" + ")}`,
+        labels: ["four-hours-collective"],
+      },
+    }),
+  });
+  if (!response.ok)
+    throw new Error(
+      `Collective incident creation failed (HTTP ${response.status})`,
+    );
+  const created = (await response.json()) as { key: string };
+  const data = await collectiveCase(
+    current.data.incident,
+    candidates,
+    created.key,
+    actor(req.context),
+    new Date().toISOString(),
+  );
+  await store.save(created.key, data, 0);
+  await kvs.set(marker, created.key);
+  return view(created.key, req.context);
 });
 resolver.define("report", async (req: Req) =>
   reportFields(
     (await load(issueKey.parse(req.payload.key), req.context)).data,
     z
-      .enum(["initial", "intermediate", "final", "reclassification"])
+      .enum(["initial", "intermediate", "final", "reclassification", "gdpr"])
       .parse(req.payload.kind),
   ),
 );
@@ -298,6 +361,12 @@ resolver.define("validateNarrative", async (req: Req) =>
 );
 resolver.define("workpaper", async (req: Req) =>
   workpaper((await load(issueKey.parse(req.payload.key), req.context)).data),
+);
+resolver.define("evidenceBundle", async (req: Req) =>
+  evidenceBundle(
+    (await load(issueKey.parse(req.payload.key), req.context)).data,
+    new Date().toISOString(),
+  ),
 );
 resolver.define("publishWorkpaper", async (req: Req) =>
   publishWorkpaper(
@@ -315,6 +384,7 @@ resolver.define("refreshGraphEvidence", async (req: Req) => {
   const key = issueKey.parse(req.payload.key);
   await editable(key, req.context);
   const stored = await load(key, req.context);
+  assertOpen(stored.data);
   if (!stored.data.incident.synthetic)
     throw new Error(
       "Graph enrichment is scoped to synthetic demonstration incidents",
@@ -337,6 +407,18 @@ resolver.define("refreshGraphEvidence", async (req: Req) => {
   await store.save(key, next, stored.version);
   return view(key, req.context);
 });
+resolver.define("refreshJiraObservations", async (req: Req) => {
+  const key = issueKey.parse(req.payload.key);
+  await editable(key, req.context);
+  const stored = await load(key, req.context);
+  const next = await refreshJiraObservations(
+    stored.data,
+    actor(req.context),
+    new Date().toISOString(),
+  );
+  await store.save(key, next, stored.version);
+  return view(key, req.context);
+});
 export const handler = resolver.getDefinitions();
 
 export async function incidentEvidence(
@@ -351,11 +433,6 @@ export async function incidentRecurrence(
   context: RequestContext,
 ) {
   const current = await load(issueKey.parse(payload.issueKey), context);
-  const candidates = [];
-  for (const key of await store.keys()) {
-    try {
-      candidates.push((await load(key, context)).data.incident);
-    } catch {}
-  }
+  const candidates = await recurrenceCandidates(context);
   return recurring(current.data.incident, candidates);
 }

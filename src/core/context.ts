@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { Temporal } from "@js-temporal/polyfill";
 import { instant, incidentSchema } from "./model";
-import { append, type RecordState } from "./ledger";
+import { append, assertOpen, type RecordState } from "./ledger";
 
 export const contextSchema = z.object({
+  entityId: z.string().trim().min(1).max(100),
   service: z.string().trim().min(1).max(150),
   serviceId: z.string().trim().min(1).max(100),
   rootCause: z.string().trim().max(300),
@@ -33,6 +34,7 @@ export async function updateContext(
   actor: string,
   now: string,
 ): Promise<RecordState> {
+  assertOpen(state);
   const context = contextSchema.parse(input);
   if (
     Date.parse(context.awarenessAt) > Date.parse(now) ||

@@ -105,7 +105,11 @@ export async function serviceEvidence(serviceId: string) {
     throw new Error(
       "This demonstration only reads the synthetic technical register",
     );
-  const critical = attributes.tags?.includes("synthetic-critical-function");
+  const critical = attributes.tags?.includes("synthetic-critical-function")
+    ? true
+    : attributes.tags?.includes("synthetic-non-critical-function")
+      ? false
+      : undefined;
   if (critical === undefined)
     throw new Error("Service metadata has no classification mapping");
   return {

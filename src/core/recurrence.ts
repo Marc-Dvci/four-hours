@@ -1,6 +1,13 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { classify, any } from "./classify";
-import type { Incident, FactKey, Assessment } from "./model";
+import {
+  incidentSchema,
+  EU_STATES,
+  type Incident,
+  type FactKey,
+  type Assessment,
+} from "./model";
+import { append, type RecordState } from "./ledger";
 
 export type RecurrenceResult = {
   incidentIds: string[];
@@ -21,13 +28,18 @@ export function recurring(
   });
   if (current.recurrenceExempt)
     return none("Article 8(2) exemption recorded for this entity.");
-  if (!current.rootCause.trim() || /^unknown/i.test(current.rootCause))
+  if (
+    !current.rootCause.trim() ||
+    /^(unknown|tbd|pending|under investigation|not (known|established))/i.test(
+      current.rootCause,
+    )
+  )
     return none("A common apparent root cause is required.");
   if (classify(current).verdict !== "NOT_MAJOR")
     return none(
       "The recurring-incident route combines incidents individually assessed as not major.",
     );
-  const end = Temporal.Instant.from(current.awarenessAt);
+  const end = Temporal.Instant.from(current.occurredAt);
   const start = end
     .toZonedDateTimeISO(current.timezone)
     .subtract({ months: 6 })
@@ -35,12 +47,12 @@ export function recurring(
   const unique = new Map<string, Incident>();
   for (const i of [current, ...candidates]) {
     if (
-      i.serviceId !== current.serviceId ||
+      i.entityId !== current.entityId ||
       i.rootCause.trim().toLowerCase() !==
         current.rootCause.trim().toLowerCase()
     )
       continue;
-    const when = Temporal.Instant.from(i.awarenessAt);
+    const when = Temporal.Instant.from(i.occurredAt);
     if (
       Temporal.Instant.compare(when, start) < 0 ||
       Temporal.Instant.compare(when, end) > 0 ||
@@ -97,11 +109,15 @@ export function recurring(
     disjoint && group.every((i) => i.facts.economicImpact.value !== null)
       ? group.reduce((s, i) => s + i.facts.economicImpact.value!, 0)
       : null;
-  aggregate.facts.memberStates.value = group.some(
-    (i) => i.facts.memberStates.value === null,
-  )
-    ? null
-    : [...new Set(group.flatMap((i) => i.facts.memberStates.value!))];
+  const knownStates = [
+    ...new Set(group.flatMap((i) => i.facts.memberStates.value ?? [])),
+  ];
+  aggregate.facts.memberStates.value =
+    knownStates.filter((s) => EU_STATES.has(s)).length >= 2
+      ? knownStates
+      : group.some((i) => i.facts.memberStates.value === null)
+        ? null
+        : [...new Set(group.flatMap((i) => i.facts.memberStates.value!))];
   for (const f of Object.values(aggregate.facts)) {
     f.source = `Recurring group: ${group.map((i) => i.id).join(", ")}`;
     f.quality = "estimated";
@@ -111,7 +127,56 @@ export function recurring(
     assessment: classify(aggregate),
     aggregated: aggregate,
     reason: disjoint
-      ? "Same service and apparent root cause within six months. Distinct incident costs combined; people and transaction counts require deduplication."
+      ? "Same apparent root cause within six months across visible managed incidents. Disjoint costs combined as an estimate; shared or duplicate invoices require officer review. Customer and transaction counts require deduplication."
       : "Overlapping incident windows: a combined cost estimate is required.",
+  };
+}
+
+export async function collectiveCase(
+  current: Incident,
+  members: Incident[],
+  id: string,
+  actor: string,
+  now: string,
+): Promise<RecordState> {
+  const result = recurring(current, members);
+  if (!result.aggregated || !result.assessment || result.incidentIds.length < 2)
+    throw new Error("A qualifying recurring group is required");
+  const selected = result.incidentIds.map((key) =>
+    [current, ...members].find((i) => i.id === key)!,
+  );
+  const incident = incidentSchema.parse({
+    ...result.aggregated,
+    id,
+    title: `Recurring incidents: ${result.incidentIds.join(" + ")}`,
+    occurredAt: selected.reduce(
+      (earliest, i) =>
+        Date.parse(i.occurredAt) < Date.parse(earliest)
+          ? i.occurredAt
+          : earliest,
+      current.occurredAt,
+    ),
+    awarenessAt: now,
+    assessedAt: now,
+    service: `Collective assessment (${selected.length} incidents)`,
+    serviceId: `collective:${id}`,
+  });
+  const recurrence = {
+    memberIds: result.incidentIds,
+    members: structuredClone(selected),
+    detectedAt: now,
+  };
+  return {
+    incident,
+    signature: null,
+    receipts: [],
+    recurrence,
+    revisions: await append(
+      [],
+      actor,
+      "incident.created",
+      { incident, recurrence },
+      now,
+    ),
   };
 }
