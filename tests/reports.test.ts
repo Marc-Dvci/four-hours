@@ -63,7 +63,7 @@ describe("evidence-cited reporting", () => {
     ).toBe(false));
   it("formats all evidence and hash in workpaper", async () => {
     const t = await workpaper(state);
-    expect(t).toContain("Synthetic replay evidence");
+    expect(t).toContain("Synthetic demonstration incident.");
     expect(t).toContain("Evidence SHA-256:");
     expect(t).toContain("affectedClients");
   });

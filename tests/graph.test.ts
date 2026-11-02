@@ -31,6 +31,31 @@ describe("technical graph projection", () => {
       else
         expect((await serviceEvidence("urgent-payments")).value).toBe(expected);
     });
+  it("reads the flattened object returned by the live read API", async () => {
+    getSetting.mockResolvedValue("connected");
+    getObject.mockResolvedValue({
+      success: true,
+      object: {
+        displayName: "Urgent payments · synthetic service",
+        url: "https://example.com/service",
+        schemaVersion: "2.0",
+        environment: "synthetic",
+        tags: ["synthetic", "synthetic-critical-function"],
+      },
+    });
+    const fact = await serviceEvidence("urgent-payments");
+    expect(fact.value).toBe(true);
+    expect(fact.source).toBe(
+      "Teamwork Graph · Urgent payments · synthetic service",
+    );
+  });
+  it("writes software-service objects with schema version 2.0", () => {
+    for (const o of serviceObjects(
+      "https://test.atlassian.net",
+      "2026-10-29T12:00:00Z",
+    ))
+      expect(o.schemaVersion).toBe("2.0");
+  });
   it("projects only synthetic technical service metadata", () => {
     const objects = serviceObjects(
       "https://test.atlassian.net",

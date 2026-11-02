@@ -1564,7 +1564,7 @@ function App() {
               </span>
               <span>
                 {incident.synthetic
-                  ? "SYNTHETIC REPLAY · NO REGULATOR SUBMISSION"
+                  ? "DEMO DATA · NO REGULATOR SUBMISSION"
                   : `LIVE SITE · ${incident.id}`}
                 <span className="footer-dot">·</span>EU 2024/1772 + 2025/301
               </span>

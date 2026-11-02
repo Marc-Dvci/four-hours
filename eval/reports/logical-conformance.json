@@ -5,8 +5,8 @@
   "method": "Exhaustive truth completion over eight three-valued inputs representing the critical gateway, special route and materiality groups. Logical conformance, not independent legal or production validation.",
   "latency": {
     "unit": "milliseconds per classification",
-    "p50": 0.06359999999995125,
-    "p95": 0.10069999999996071,
+    "p50": 0.12469999999996162,
+    "p95": 0.24699999999995725,
     "runtime": "v24.22.1"
   }
 }

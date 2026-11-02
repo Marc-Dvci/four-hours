@@ -22,7 +22,7 @@ export function serviceObjects(
   now: string,
 ): types.SoftwareServiceObject[] {
   return TECHNICAL_SERVICES.map((s) => ({
-    schemaVersion: "1.0",
+    schemaVersion: "2.0",
     id: s.id,
     displayName: s.displayName,
     description: s.description,
@@ -57,10 +57,18 @@ export async function syncServices(
     connectionId,
     objects: serviceObjects(baseUrl, new Date().toISOString()),
   });
-  if (!response.success || (response.results?.rejected?.length ?? 0) > 0)
-    throw new Error(
-      "Teamwork Graph rejected one or more service objects; check the app logs",
+  const rejected = response.results?.rejected ?? [];
+  if (!response.success || rejected.length > 0) {
+    console.error(
+      "Teamwork Graph setObjects",
+      JSON.stringify({ error: response.error, rejected }),
     );
+    const reason =
+      rejected[0]?.errors?.map((e) => `${e.key}: ${e.message}`).join("; ") ??
+      response.error ??
+      "unknown";
+    throw new Error(`Teamwork Graph rejected the service objects (${reason})`);
+  }
   const result = {
     accepted: response.results?.accepted?.length ?? 0,
     connectionId,
@@ -93,14 +101,18 @@ export async function serviceEvidence(serviceId: string) {
     objectType: "atlassian:software-service",
     externalId: `four-hours-${serviceId}`,
   });
-  if (
-    !response.success ||
-    !response.object ||
-    !("atlassian:software-service" in response.object)
-  )
-    throw new Error("The service is not yet available in Teamwork Graph");
-  const object = response.object;
-  const attributes = object["atlassian:software-service"];
+  if (!response.success || !response.object)
+    throw new Error(
+      `The service is not yet available in Teamwork Graph${response.error ? ` (${response.error})` : ""}`,
+    );
+  type Attributes = { environment?: string; tags?: string[] };
+  const object = response.object as {
+    displayName: string;
+    url: string;
+    "atlassian:software-service"?: Attributes;
+  } & Attributes;
+  // The read API returns the attributes at the top level; the write shape nests them.
+  const attributes: Attributes = object["atlassian:software-service"] ?? object;
   if (attributes.environment !== "synthetic")
     throw new Error(
       "This demonstration only reads the synthetic technical register",
