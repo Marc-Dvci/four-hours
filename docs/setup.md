@@ -1,86 +1,73 @@
 # Setup
 
-## Credential-free replay
+## Install
 
-Use Node 24.22.1 or newer in a supported Forge release line.
-
-```sh
-npm ci
-npm run dev
-```
-
-Open http://127.0.0.1:4173. Five synthetic incidents load automatically. The replay uses a fixed Paris clock and browser-local storage. Settings advances the clock or resets the replay. The deterministic engine is the same engine used by Forge.
-
-```sh
-npm run audit
-npm run test:browser
-```
-
-CI downloads Playwright Chromium. Locally, the browser tests use installed Chrome. Set `CI=true` to use Playwright Chromium locally as well.
-
-Docker serves the same static replay:
-
-```sh
-docker build -t four-hours .
-docker run --rm -p 4173:80 four-hours
-```
-
-## Forge installation
-
-Deployment is locked by the zero-spend policy. Read [Cost controls](COSTS.md) before registering or installing. A verified provider billing protection is required. Install the Forge CLI separately with `npm install --global @forge/cli@15.0.0`.
-
-`manifest.yml` is the infrastructure definition. Its initial UUID is a registration placeholder. Replace it using your own Forge registration before deployment.
-
-```sh
-npm run build
-forge login
-forge register "Four Hours"
-forge lint
-npm run deploy:forge -- development
-forge install --environment development --product jira --site your-site.atlassian.net
-```
-
-Forge registration may require accepting usage-based billing terms for a Developer Space. Review those terms and the space's current billing settings. The app uses Forge functions, storage and connector APIs; Rovo features use the installation's Rovo entitlement.
-
-Optionally install into Confluence on the same site:
-
-```sh
-forge install --environment development --product confluence --site your-site.atlassian.net
-```
+1. Open the installation link in the [README](../README.md), choose your site and approve the scopes for Jira and
+   Confluence. Confluence is optional and used only for the workpaper.
+2. Create a Jira Service Management space from the IT service management template. It provides the Incident work
+   type and the "Report a system problem" request type that the demo uses. Any other Jira project also works; the
+   demo incidents are then created as ordinary work items.
 
 ## First run
 
-1. In Jira, open Apps > Four Hours. Open Settings, select a project you administer and click Load demo bank. This creates five labelled synthetic work items. Retrying resumes from the per-incident seed markers.
-2. Open a demo work item and use Apps > Four Hours for its panel, or continue in the global incident desk.
-3. Inspect the critical-services gateway and six materiality groups. Expand a row to inspect each fact and its provenance.
-4. In Settings, a Jira administrator can save the Atlassian account IDs of risk officers. Sign as a configured officer or Jira project administrator. Every write requires Jira Edit Issues permission. The actor comes from the authenticated Forge context.
-5. On Reports, prepare the appropriate stage. Record a genuine submission with its actual timestamp and authority reference. In the synthetic demo, use a clearly labelled demo reference.
-6. On Evidence trail, export the workpaper. To publish it to Confluence, enter the target space's numeric ID in Settings. The current user's Confluence permissions apply.
-
-## Real incidents
-
-Click Add incident and enter an existing Jira key, the affected service and awareness time. Jira supplies the title. Every classification fact starts as unknown. Edit each fact with a source URL and assessment; then set the stable financial entity identifier (shared only within the same legal entity), occurrence time, apparent root cause, service ID, reporting timezone and privacy awareness through Edit incident context.
-
-Jira issue access controls apply to reads and writes. A bound issue panel only permits access to its own incident. Global population and recurrence checks omit records the current user cannot read. Other Jira/storage failures stop the search with a coverage error. Searches cover only readable Four Hours records, not every institutional incident. Concurrent writes use a version condition inside a Forge storage transaction.
-
-See [Jira observations](observations.md) for structured evidence import, [report coverage](report-fields.md) for draft fields and [evidence retention](evidence.md) for independent bundle verification.
+1. In Jira, open **Apps > Four Hours** and click **Set up the incident desk** (later, the gear at the top right of
+   the desk opens the same **Incident desk settings**). The desk is also under **Jira settings > Apps > Four
+   Hours**.
+2. Under **Load the demo bank**, choose the project and click **Load demo bank**. Five incidents for a fictional
+   bank are raised as JSM requests. Retrying resumes from the per-incident seed markers.
+3. Open a demo work item and choose **Four Hours** from its apps button for the panel, or continue in the desk.
+4. Inspect the critical-services gateway and six materiality groups. Expand a row to see each fact and its
+   provenance.
+5. Under **Risk officers**, a Jira administrator can save the Atlassian account IDs of risk officers. Configured
+   officers and Jira project administrators can sign. Every write requires Jira Edit Issues permission, and the
+   actor comes from the authenticated Forge context.
+6. **Sign classification**, then **Confirm classification**, with the actual classification time and a rationale.
+7. On **Reports**, prepare the stage and **Record submission** with its timestamp and authority reference. The
+   next deadline starts from it.
+8. Under **Confluence workpaper**, choose a space and **Publish current workpaper**. The current user's Confluence
+   permissions apply.
+9. **Reset the demo** deletes the demo incidents and their records, so the demo bank can be loaded again.
 
 ## Teamwork Graph
 
-In Atlassian Administration > Connected apps > Four Hours > Connections, connect Four Hours. On the Service context tab, choose Sync technical services. The connector indexes two synthetic technical software-service objects and inspects item-level ingestion results. The admin can disconnect the connector to remove all data ingested by that connection. Sync uses upserts; source deletion is handled by disconnecting the synthetic connection.
+1. In admin.atlassian.com, open **Connected apps**, then **Four Hours > View app details > Connections**, and click
+   **Connect** under "Teamwork Graph connectors".
+2. On an incident's **Service context** tab, choose **Sync technical services**. The connector writes the technical
+   service register as `atlassian:software-service` objects and checks item-level ingestion results. Disconnecting
+   the connector removes the data ingested by that connection.
+3. **Refresh graph evidence** reads the affected service back from Teamwork Graph and attaches its critical-function
+   tag to the assessment as a cited fact. This creates a hashed revision and requires a new signature. A service
+   without a critical-function mapping is refused rather than read as false.
 
-Use Refresh graph evidence to read the synthetic service back from Teamwork Graph and attach its mapped critical-function evidence to the assessment. This creates a hashed revision and requires a new signature.
+## Real incidents
 
-An absent critical-function mapping is refused rather than interpreted as false. The dependency drawing is shown only for its mapped demo service and is the labelled synthetic replay model. Ingestion acceptance and search indexing are separate platform states. The product reports the accepted count, without claiming search indexing has completed.
+Click **Add incident** and enter an existing Jira key, the affected service and awareness time. Jira supplies the
+title. Every classification fact starts as unknown. Edit each fact with a source URL and assessment; then set the
+stable financial entity identifier (shared only within the same legal entity), occurrence time, apparent root
+cause, service ID, reporting timezone and privacy awareness through **Edit incident context**.
 
-## Rovo and MCP
+Jira issue access controls apply to reads and writes. A bound issue panel only permits access to its own incident.
+Population and recurrence checks omit records the current user cannot read. Concurrent writes use a version
+condition inside a Forge storage transaction.
 
-The Rovo agent has two read-only actions: incident evidence and recurrence. It explains deterministic results and proposes narratives citing fact IDs. Paste drafts into the Reports validator for numeric and citation checks, then review their wording against the evidence.
+See [Jira observations](observations.md) for structured evidence import, [report coverage](report-fields.md) for
+report fields and [evidence retention](evidence.md) for independent bundle verification.
 
-For an MCP client, an administrator enables tool exposure on the installed app. Connect the client to `https://mcp.atlassian.com/forge/<registered-app-id>`. The two tools use the authenticated caller's Jira access. Classification signatures and submission receipts remain human actions in the interface.
+## Build and deploy your own copy
 
-## Distribution
+Use Node 24.22.1 or newer and the Forge CLI (`npm install --global @forge/cli`).
 
-After production deployment, enable sharing in the Forge developer console and copy its installation link into the submission document. Privacy and terms documents are in `docs/`. A verified installation link and a target-platform demonstration are release requirements.
+```sh
+npm ci
+npm run audit
+forge login
+forge register "Four Hours"
+npm run deploy
+forge install -e production --product jira --site your-site.atlassian.net
+forge install -e production --product confluence --site your-site.atlassian.net
+```
 
-See the [target-platform release checklist](release-checklist.md) for the exact remaining runtime evidence and operational limits.
+## Offline preview
+
+`npm ci && npm run dev` opens the same engine in the browser at http://127.0.0.1:4173 with five fictional incidents,
+a fixed Paris clock and browser-local storage. `npm run test:browser` runs the 13 browser workflows against it.
