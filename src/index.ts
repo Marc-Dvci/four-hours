@@ -6,7 +6,7 @@ import { evidenceBundle } from "./core/bundle";
 import { updateReportDetail } from "./core/report-details";
 import { refreshJiraObservations } from "./forge/observations";
 import api, { route } from "@forge/api";
-import { kvs } from "@forge/kvs";
+import { kvs, WhereConditions } from "@forge/kvs";
 import { z } from "zod";
 import { incidentSchema } from "./core/model";
 import { classify } from "./core/classify";
@@ -143,6 +143,12 @@ resolver.define("loadDemo", async (req: Req) => {
     info.issueTypes.find((t) => !t.subtask && /^incident$/i.test(t.name)) ??
     info.issueTypes.find((t) => !t.subtask);
   if (!type) throw new Error("Project needs an incident or task issue type");
+  const serverInfo = await api
+    .asUser()
+    .requestJira(route`/rest/api/3/serverInfo`);
+  const base = serverInfo.ok
+    ? ((await serverInfo.json()) as { baseUrl: string }).baseUrl
+    : "";
   let desk: { id: string; requestTypeId: string } | null = null;
   const desks = await api
     .asUser()
@@ -224,8 +230,11 @@ resolver.define("loadDemo", async (req: Req) => {
       const shift = Date.now() - Date.parse("2026-10-29T10:08:00Z");
       for (const k of ["occurredAt", "awarenessAt", "assessedAt"] as const)
         incident[k] = new Date(Date.parse(incident[k]) + shift).toISOString();
-      for (const f of Object.values(incident.facts))
+      for (const f of Object.values(incident.facts)) {
         f.observedAt = new Date(Date.parse(f.observedAt) + shift).toISOString();
+        // Demo evidence points at the incident itself rather than an external system.
+        f.url = `${base}/browse/${key}`;
+      }
       const data: RecordState = {
         incident: incidentSchema.parse(incident),
         signature: null,
@@ -244,6 +253,36 @@ resolver.define("loadDemo", async (req: Req) => {
   }
   await kvs.set(`fh:demo:${project}`, created);
   return { keys: created };
+});
+// Deletes the demo incidents (Jira work items and Forge records) so the demo can be loaded again.
+resolver.define("resetDemo", async (req: Req) => {
+  await admin(req.context);
+  let removed = 0;
+  for (const key of await store.keys()) {
+    const stored = await store.read(key);
+    if (stored && !stored.data.incident.synthetic) continue;
+    await api
+      .asUser()
+      .requestJira(route`/rest/api/3/issue/${key}?deleteSubtasks=true`, {
+        method: "DELETE",
+      });
+    await kvs.entity("incident").delete(key);
+    await kvs.delete(`fh:index:${key}`);
+    removed++;
+  }
+  for (const prefix of ["fh:demo:", "fh:demo-item:", "fh:collective:"]) {
+    let cursor: string | undefined;
+    do {
+      const q = kvs
+        .query()
+        .where("key", WhereConditions.beginsWith(prefix))
+        .limit(100);
+      const page = await (cursor ? q.cursor(cursor) : q).getMany();
+      for (const r of page.results) await kvs.delete(r.key);
+      cursor = page.nextCursor;
+    } while (cursor);
+  }
+  return { removed };
 });
 resolver.define("createIncident", async (req: Req) => {
   const incident = incidentSchema.parse(req.payload.incident);

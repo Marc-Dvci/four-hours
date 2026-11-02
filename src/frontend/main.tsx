@@ -2097,6 +2097,24 @@ function App() {
               >
                 Load demo bank
               </button>
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() =>
+                  void task(async () => {
+                    const r = await client.forgeCall<{ removed: number }>(
+                      "resetDemo",
+                    );
+                    await refresh();
+                    setModal(null);
+                    setNotice(
+                      `${r.removed} demo incidents deleted. Load the demo bank again to start over.`,
+                    );
+                  })
+                }
+              >
+                Reset the demo
+              </button>
               <hr />
               <h3>Risk officers</h3>
               <label htmlFor="risk-officers">
