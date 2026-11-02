@@ -2017,3 +2017,18 @@ dialog p.small-note,
     font-size: 8px;
   }
 }
+/* Issue panel: the incident column only, sized to its content. */
+.app-shell.bound {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  grid-template-areas: "main";
+}
+.app-shell.bound .main {
+  padding: 4px 4px 24px;
+}
+.app-shell.bound .breadcrumb {
+  display: none;
+}
+.app-shell.bound .incident-heading h1 {
+  display: none;
+}

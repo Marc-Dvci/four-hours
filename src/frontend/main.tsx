@@ -176,6 +176,9 @@ function App() {
   const [projects, setProjects] = useState<{ key: string; name: string }[]>([]);
   const [officers, setOfficers] = useState("");
   const [space, setSpace] = useState("");
+  const [spaceList, setSpaceList] = useState<{ id: string; name: string }[]>(
+    [],
+  );
   const [newKey, setNewKey] = useState("");
   const [newService, setNewService] = useState("");
   const [newAwareness, setNewAwareness] = useState("");
@@ -413,132 +416,142 @@ function App() {
         .includes(query.toLowerCase()),
     ) ?? [];
   return (
-    <div className="app-shell">
+    <div className={`app-shell${app?.boundKey ? " bound" : ""}`}>
       <a className="skip-link" href="#incident-main">
         Skip to incident
       </a>
-      <header className="topbar">
-        <a
-          className="brand"
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            setTab("classification");
-          }}
-          aria-label="Four Hours incident desk"
-        >
-          <span className="brand-clock" aria-hidden="true">
-            ◷
-          </span>
-          <strong>
-            four hours<span className="brand-dot">.</span>
-          </strong>
-        </a>
-        <span className="top-divider" />
-        <span className="top-caption">THE INCIDENT DESK</span>
-        <div className="top-right">
-          <span className={`mode ${app?.mode === "forge" ? "live" : ""}`}>
-            <i />
-            {app?.mode === "forge" ? "FORGE · LIVE SITE" : "SYNTHETIC REPLAY"}
-          </span>
-          <span className="top-time">
-            {app ? time(app.now, true) : "Loading"} <small>PARIS</small>
-          </span>
-          <button
-            className="icon-button"
-            aria-label="Open settings"
-            onClick={() => {
-              setModal("settings");
-              if (client.isForge)
-                void task(async () => {
-                  setProjects(await client.forgeCall("projects"));
-                  const settings = await client.forgeCall<{
-                    officers: string[];
-                  }>("settings");
-                  setOfficers(settings.officers.join("\n"));
-                });
-            }}
-          >
-            ⚙
-          </button>
-        </div>
-      </header>
-      <aside className="sidebar" aria-label="Incident list">
-        <div className="sidebar-heading">
-          <span>INCIDENT REGISTER</span>
-          <span>{app?.records.length ?? "00"}</span>
-        </div>
-        <div className="sidebar-title">
-          Stay ahead
-          <br />
-          of the clock.
-        </div>
-        <p className="sidebar-subtitle">
-          One incident. Every criterion.
-          <br />A traceable decision.
-        </p>
-        <label className="search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            aria-label="Find an incident"
-            placeholder="Find an incident"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-        <nav aria-label="Incidents">
-          {filtered.map((r) => {
-            const i = r.data.incident;
-            const a = client.classify(i);
-            return (
+      {!app?.boundKey && (
+        <>
+          <header className="topbar">
+            <a
+              className="brand"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setTab("classification");
+              }}
+              aria-label="Four Hours incident desk"
+            >
+              <span className="brand-clock" aria-hidden="true">
+                ◷
+              </span>
+              <strong>
+                four hours<span className="brand-dot">.</span>
+              </strong>
+            </a>
+            <span className="top-divider" />
+            <span className="top-caption">THE INCIDENT DESK</span>
+            <div className="top-right">
+              <span className={`mode ${app?.mode === "forge" ? "live" : ""}`}>
+                <i />
+                {app?.mode === "forge"
+                  ? "FORGE · LIVE SITE"
+                  : "SYNTHETIC REPLAY"}
+              </span>
+              <span className="top-time">
+                {app ? time(app.now, true) : "Loading"} <small>PARIS</small>
+              </span>
               <button
-                key={i.id}
-                className={`incident-item ${selected === i.id ? "selected" : ""}`}
-                aria-current={selected === i.id ? "page" : undefined}
-                onClick={() => select(i.id)}
+                className="icon-button"
+                aria-label="Open settings"
+                onClick={() => {
+                  setModal("settings");
+                  if (client.isForge)
+                    void task(async () => {
+                      setProjects(await client.forgeCall("projects"));
+                      setSpaceList(await client.forgeCall("spaces"));
+                      const settings = await client.forgeCall<{
+                        officers: string[];
+                      }>("settings");
+                      setOfficers(settings.officers.join("\n"));
+                    });
+                }}
               >
-                <span className="incident-item-top">
-                  <strong>{i.id}</strong>
-                  <span
-                    className={`incident-dot ${a.verdict.toLowerCase()}`}
-                    aria-label={a.verdict}
-                  />
-                </span>
-                <span className="incident-item-title">{i.title}</span>
-                <span className="incident-item-service">{i.service}</span>
+                ⚙
               </button>
-            );
-          })}
-        </nav>
-        {!filtered.length && (
-          <p className="empty-small">
-            {query
-              ? "No matching incident."
-              : "Load the demo or add an incident to begin."}
-          </p>
-        )}
-        <button
-          className="add-incident"
-          onClick={() => {
-            setNewAwareness(isoLocal(app?.now ?? new Date().toISOString()));
-            setModal("create");
-          }}
-        >
-          + Add incident
-        </button>
-        <div className="sidebar-bottom">
-          <span className="sidebar-rule" />
-          <span className="eyebrow">DORA · 2024/1772</span>
-          <p>
-            The evidence makes the case.
-            <br />
-            The officer makes the decision.
-          </p>
-          <button className="text-button" onClick={() => void task(refresh)}>
-            Refresh register ↻
-          </button>
-        </div>
-      </aside>
+            </div>
+          </header>
+          <aside className="sidebar" aria-label="Incident list">
+            <div className="sidebar-heading">
+              <span>INCIDENT REGISTER</span>
+              <span>{app?.records.length ?? "00"}</span>
+            </div>
+            <div className="sidebar-title">
+              Stay ahead
+              <br />
+              of the clock.
+            </div>
+            <p className="sidebar-subtitle">
+              One incident. Every criterion.
+              <br />A traceable decision.
+            </p>
+            <label className="search">
+              <span aria-hidden="true">⌕</span>
+              <input
+                aria-label="Find an incident"
+                placeholder="Find an incident"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <nav aria-label="Incidents">
+              {filtered.map((r) => {
+                const i = r.data.incident;
+                const a = client.classify(i);
+                return (
+                  <button
+                    key={i.id}
+                    className={`incident-item ${selected === i.id ? "selected" : ""}`}
+                    aria-current={selected === i.id ? "page" : undefined}
+                    onClick={() => select(i.id)}
+                  >
+                    <span className="incident-item-top">
+                      <strong>{i.id}</strong>
+                      <span
+                        className={`incident-dot ${a.verdict.toLowerCase()}`}
+                        aria-label={a.verdict}
+                      />
+                    </span>
+                    <span className="incident-item-title">{i.title}</span>
+                    <span className="incident-item-service">{i.service}</span>
+                  </button>
+                );
+              })}
+            </nav>
+            {!filtered.length && (
+              <p className="empty-small">
+                {query
+                  ? "No matching incident."
+                  : "Load the demo or add an incident to begin."}
+              </p>
+            )}
+            <button
+              className="add-incident"
+              onClick={() => {
+                setNewAwareness(isoLocal(app?.now ?? new Date().toISOString()));
+                setModal("create");
+              }}
+            >
+              + Add incident
+            </button>
+            <div className="sidebar-bottom">
+              <span className="sidebar-rule" />
+              <span className="eyebrow">DORA · 2024/1772</span>
+              <p>
+                The evidence makes the case.
+                <br />
+                The officer makes the decision.
+              </p>
+              <button
+                className="text-button"
+                onClick={() => void task(refresh)}
+              >
+                Refresh register ↻
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
       <main id="incident-main" className="main" tabIndex={-1}>
         <div aria-live="polite" className="messages">
           {error && (
@@ -582,6 +595,7 @@ function App() {
                 if (client.isForge)
                   void task(async () => {
                     setProjects(await client.forgeCall("projects"));
+                    setSpaceList(await client.forgeCall("spaces"));
                     const settings = await client.forgeCall<{
                       officers: string[];
                     }>("settings");
@@ -2113,14 +2127,19 @@ function App() {
               </button>
               <hr />
               <h3>Confluence workpaper</h3>
-              <label htmlFor="space-id">Confluence space ID</label>
-              <input
+              <label htmlFor="space-id">Confluence space</label>
+              <select
                 id="space-id"
                 value={space}
                 onChange={(e) => setSpace(e.target.value)}
-                inputMode="numeric"
-                placeholder="Numeric space ID"
-              />
+              >
+                <option value="">Choose a space</option>
+                {spaceList.map((sp) => (
+                  <option key={sp.id} value={sp.id}>
+                    {sp.name}
+                  </option>
+                ))}
+              </select>
               <button
                 className="secondary"
                 disabled={busy || !selected || !/^\d+$/.test(space)}

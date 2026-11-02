@@ -20,7 +20,7 @@
     "manifest": "node scripts/manifest.cjs",
     "audit": "npm run typecheck && npm test && npm run eval && npm run eval:oracle && npm run build && npm run manifest",
     "format": "prettier --write src tests e2e eval/run.ts *.ts *.json manifest.yml",
-    "deploy:forge": "tsx scripts/deploy.ts",
+    "deploy": "npm run build && forge deploy -e production",
     "eval:oracle": "tsx eval/oracle.ts",
     "verify:bundle": "node scripts/verify-bundle.mjs"
   },

@@ -35,7 +35,7 @@ import * as store from "./forge/store";
 import { accessiblePopulation } from "./forge/population";
 import { UnavailableIncident } from "./forge/access";
 import { syncServices, serviceEvidence } from "./forge/graph";
-import { publishWorkpaper } from "./forge/confluence";
+import { publishWorkpaper, spaces } from "./forge/confluence";
 export { onConnectionChange } from "./forge/graph";
 
 const resolver = new Resolver();
@@ -109,6 +109,10 @@ resolver.define("bootstrap", async (req: Req) => {
     graphStatus: await kvs.get("fh:graph-status"),
   };
 });
+resolver.define("spaces", async (req: Req) => {
+  actor(req.context);
+  return spaces();
+});
 resolver.define("projects", async (req: Req) => {
   await admin(req.context);
   const r = await api
@@ -133,49 +137,85 @@ resolver.define("loadDemo", async (req: Req) => {
     .requestJira(route`/rest/api/3/project/${project}`);
   if (!p.ok) throw new Error("Project unavailable");
   const info = (await p.json()) as {
-    issueTypes: { id: string; subtask: boolean }[];
+    issueTypes: { id: string; name: string; subtask: boolean }[];
   };
-  const type = info.issueTypes.find((t) => !t.subtask);
+  const type =
+    info.issueTypes.find((t) => !t.subtask && /^incident$/i.test(t.name)) ??
+    info.issueTypes.find((t) => !t.subtask);
   if (!type) throw new Error("Project needs an incident or task issue type");
+  let desk: { id: string; requestTypeId: string } | null = null;
+  const desks = await api
+    .asUser()
+    .requestJira(route`/rest/servicedeskapi/servicedesk?limit=100`);
+  if (desks.ok) {
+    const found = (
+      (await desks.json()) as { values: { id: string; projectKey: string }[] }
+    ).values.find((d) => d.projectKey === project);
+    if (found) {
+      const types = await api
+        .asUser()
+        .requestJira(
+          route`/rest/servicedeskapi/servicedesk/${found.id}/requesttype?limit=100`,
+        );
+      const values = types.ok
+        ? (
+            (await types.json()) as {
+              values: { id: string; issueTypeId: string }[];
+            }
+          ).values
+        : [];
+      const incidentType = values.find((t) => t.issueTypeId === type.id);
+      if (incidentType) desk = { id: found.id, requestTypeId: incidentType.id };
+    }
+  }
   const created: string[] = [];
   for (const demo of demoIncidents) {
     const marker = `fh:demo-item:${project}:${demo.id}`;
     let key = await kvs.get<string>(marker);
     if (!key) {
-      const response = await api
-        .asUser()
-        .requestJira(route`/rest/api/3/issue`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fields: {
-              project: { key: project },
-              issuetype: { id: type.id },
-              summary: `[Four Hours demo] ${demo.title}`,
-              labels: ["four-hours-demo"],
-              description: {
-                type: "doc",
-                version: 1,
-                content: [
-                  {
-                    type: "paragraph",
-                    content: [
-                      {
-                        type: "text",
-                        text: "Synthetic Four Hours incident. Open Apps > Four Hours to review the classification evidence and reporting clocks.",
-                      },
-                    ],
-                  },
-                ],
+      const description = `Service: ${demo.service}. Apparent root cause: ${demo.rootCause}. Synthetic demonstration incident: open Four Hours from this work item to review the classification evidence and reporting clocks.`;
+      // In a service project the incident is raised as a JSM request, so it carries its request type.
+      const response = desk
+        ? await api.asUser().requestJira(route`/rest/servicedeskapi/request`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              serviceDeskId: desk.id,
+              requestTypeId: desk.requestTypeId,
+              requestFieldValues: { summary: demo.title, description },
+            }),
+          })
+        : await api.asUser().requestJira(route`/rest/api/3/issue`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fields: {
+                project: { key: project },
+                issuetype: { id: type.id },
+                summary: demo.title,
+                labels: ["four-hours-demo"],
+                description: {
+                  type: "doc",
+                  version: 1,
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: description }],
+                    },
+                  ],
+                },
               },
-            },
-          }),
-        });
+            }),
+          });
       if (!response.ok)
         throw new Error(
           `Demo creation stopped after ${created.length} incidents (HTTP ${response.status}). Retry safely.`,
         );
-      key = ((await response.json()) as { key: string }).key;
+      const body = (await response.json()) as {
+        key?: string;
+        issueKey?: string;
+      };
+      key = (body.issueKey ?? body.key)!;
       await kvs.set(marker, key);
     }
     if (!(await store.read(key))) {
