@@ -2,7 +2,7 @@
 
 ![The Four Hours incident desk in Jira: seven DORA criteria, the verdict, and the reporting clock](docs/images/incident-desk.png)
 
-![Unit tests](https://img.shields.io/badge/unit_tests-160_passing-136b52) ![Cases](https://img.shields.io/badge/labelled_cases-38%2F38-136b52) ![Oracle](https://img.shields.io/badge/oracle-6%2C561%2F6%2C561-136b52) ![Licence](https://img.shields.io/badge/licence-MIT-101c30) ![Forge](https://img.shields.io/badge/Atlassian-Forge-0052CC)
+![Unit tests](https://img.shields.io/badge/unit_tests-166_passing-136b52) ![Cases](https://img.shields.io/badge/labelled_cases-38%2F38-136b52) ![Oracle](https://img.shields.io/badge/oracle-6%2C561%2F6%2C561-136b52) ![Licence](https://img.shields.io/badge/licence-MIT-101c30) ![Forge](https://img.shields.io/badge/Atlassian-Forge-0052CC)
 
 **Four Hours decides whether an ICT incident is major under DORA, from sourced evidence, inside the Jira Service
 Management incident, and starts the four-hour reporting clock when the bank's ICT risk officer signs.**
@@ -67,8 +67,9 @@ unavailable from 10:15 CET. The ECB attributed it to a hardware defect with no m
 the disruption at roughly seven hours ([FX News Group](https://fxnewsgroup.com/forex-news/institutional/clearstream-confirms-incident-from-27-february-2025-fully-resolved/), [PaymentsJournal](https://www.paymentsjournal.com/seven-hour-ecb-outage-leaves-trillions-of-euros-in-limbo)).
 
 On such a morning the incident manager knows which service is down. The ICT risk officer has to decide whether the
-incident is major under DORA. The initial notification is due within four hours of that classification and no
-later than 24 hours after the bank became aware; the intermediate report follows within 72 hours of the initial
+incident is major under DORA. The initial notification is due within four hours of that classification,
+normally capped at 24 hours after awareness. Article 5(2) allows four hours from major classification when that
+classification happens more than 24 hours after awareness. The intermediate report follows within 72 hours of the initial
 one, and the final report one month after the latest intermediate
 ([Delegated Regulation 2025/301, Article 5](https://eur-lex.europa.eu/eli/reg_del/2025/301/oj/eng)). EU financial
 entities reported 3,383 major ICT-related incidents in 2025
@@ -94,6 +95,8 @@ and the incident manager who runs the incident in Jira Service Management.
 - **Clocks from what happened.** The initial deadline follows the four-hour rule with the 24-hour awareness cap and
   the late-classification case. The intermediate deadline starts from the recorded submission receipt, and the
   final deadline from the latest intermediate, by calendar month. The GDPR Article 33 clock runs separately.
+  After a final DORA report, privacy facts and their separate awareness time can be appended without changing
+  the finalized DORA evidence or its signature. The privacy follow-up is included in exports and verification.
 - **Six-month recurrence.** Incidents with the same apparent root cause in the previous six calendar months, across
   services, are assessed together. If they are major together, a separate collective record is created as a new
   work item in the same JSM project; the source incidents stay unchanged. Distinct costs are combined; customer
@@ -114,7 +117,7 @@ Code computes every verdict, deadline and hash. There is no model in the decisio
 | Jira | `jira:issuePanel`, `jira:globalPage`, two `jira:adminPage` modules; permission checks with `mypermissions` for every read and edit; an issue property for structured observations | Incident manager and officer work in the same record |
 | Forge | Custom UI and resolvers, KVS custom entity `incident` with versioned writes, `graph:connector` with a connection-change function | No server of my own; data stays on the platform |
 | Confluence | REST v2 page creation and a content property for the workpaper | Where review evidence is kept |
-| Teamwork Graph | `setObjects` for the software-service objects, `getObjectByExternalId` to read the affected service back into the evidence | The service map is an organisation-wide fact, held once for every incident |
+| Teamwork Graph | `setObjects` for the software-service objects, `getObjectByExternalId` to read the affected service back into the evidence | The demonstration uses synthetic service metadata; live enrichment requires an approved projection |
 
 ## Boundaries by design
 
@@ -125,14 +128,14 @@ Code computes every verdict, deadline and hash. There is no model in the decisio
 
 ## Evidence
 
-![38 of 38 labelled cases, 6,561 oracle combinations, 160 unit tests, and live timings](docs/images/results.png)
+![38 of 38 labelled cases, 6,561 oracle combinations, 166 unit tests, and live timings](docs/images/results.png)
 
 | Check | Result | Reproduce |
 |---|---|---|
 | Legal-boundary corpus | 38/38: 17 major, 17 not major, 4 incomplete | `npm run eval` |
 | Independent truth-completion oracle | 6,561/6,561 three-valued combinations agree | `npm run eval:oracle` |
-| Unit tests: rules, clocks, ledger, access, graph, Confluence, recurrence | 160 passing | `npm test` |
-| Browser workflows, from signature to evidence export | 13 passing | `npm run test:browser` |
+| Unit tests: rules, clocks, ledger, access, graph, Confluence, recurrence | 166 passing | `npm test` |
+| Browser workflows, from signature to evidence export | 14 passing | `npm run test:browser` |
 | Type check | clean | `npm run typecheck` |
 
 ### Run live

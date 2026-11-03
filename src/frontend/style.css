@@ -2032,3 +2032,7 @@ dialog p.small-note,
 .app-shell.bound .incident-heading h1 {
   display: none;
 }
+.fact.evidence-gap {
+  border-left: 3px solid #c75a19;
+  padding-left: 12px;
+}

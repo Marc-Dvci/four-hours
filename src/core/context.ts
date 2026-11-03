@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { Temporal } from "@js-temporal/polyfill";
 import { instant, incidentSchema } from "./model";
-import { append, assertOpen, type RecordState } from "./ledger";
+import {
+  append,
+  assertOpen,
+  canonical,
+  doraClosed,
+  privacyIncident,
+  recordPrivacy,
+  type RecordState,
+} from "./ledger";
 
 export const contextSchema = z.object({
   entityId: z.string().trim().min(1).max(100),
@@ -34,8 +42,34 @@ export async function updateContext(
   actor: string,
   now: string,
 ): Promise<RecordState> {
-  assertOpen(state);
   const context = contextSchema.parse(input);
+  if (doraClosed(state)) {
+    const { privacyAwarenessAt, ...dora } = context;
+    const { privacyAwarenessAt: _prior, ...original } = contextSchema.parse(
+      state.incident,
+    );
+    const normalized = (value: typeof dora) => ({
+      ...value,
+      occurredAt: new Date(value.occurredAt).toISOString(),
+      awarenessAt: new Date(value.awarenessAt).toISOString(),
+    });
+    if (canonical(normalized(dora)) !== canonical(normalized(original)))
+      throw new Error(
+        "The DORA incident is closed. Only its separate privacy awareness may be updated.",
+      );
+    const current = privacyIncident(state);
+    return recordPrivacy(
+      state,
+      {
+        awarenessAt: privacyAwarenessAt,
+        personalDataBreach: current.facts.personalDataBreach,
+        gdprRiskUnlikely: current.facts.gdprRiskUnlikely,
+      },
+      actor,
+      now,
+    );
+  }
+  assertOpen(state);
   if (
     Date.parse(context.awarenessAt) > Date.parse(now) ||
     (context.privacyAwarenessAt &&

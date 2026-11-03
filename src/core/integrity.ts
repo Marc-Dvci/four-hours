@@ -1,5 +1,5 @@
 import { canonical, verify, hash, type RecordState } from "./ledger";
-import type { Incident, FactKey } from "./model";
+import { privacySchema, type Incident, type FactKey } from "./model";
 /** Checks both the revision links and the current projection of the recorded events. */
 export async function verifyRecord(state: RecordState): Promise<boolean> {
   try {
@@ -9,6 +9,7 @@ export async function verifyRecord(state: RecordState): Promise<boolean> {
     const receipts: RecordState["receipts"] = [];
     const details: NonNullable<RecordState["reportDetails"]> = {};
     let recurrence: RecordState["recurrence"];
+    let privacy: RecordState["privacy"];
     for (const revision of state.revisions) {
       const p = revision.payload as Record<string, any>;
       if (!p || typeof p !== "object") return false;
@@ -46,7 +47,9 @@ export async function verifyRecord(state: RecordState): Promise<boolean> {
       ) {
         if (p.actor !== revision.actor) return false;
         receipts.push(p as RecordState["receipts"][number]);
-      } else if (revision.action === "report.field.updated")
+      } else if (revision.action === "privacy.assessed")
+        privacy = privacySchema.parse(p);
+      else if (revision.action === "report.field.updated")
         details[p.code] = p.fact;
       else return false;
     }
@@ -60,6 +63,8 @@ export async function verifyRecord(state: RecordState): Promise<boolean> {
     if (canonical(details) !== canonical(state.reportDetails ?? {}))
       return false;
     if (canonical(recurrence ?? null) !== canonical(state.recurrence ?? null))
+      return false;
+    if (canonical(privacy ?? null) !== canonical(state.privacy ?? null))
       return false;
     return true;
   } catch {

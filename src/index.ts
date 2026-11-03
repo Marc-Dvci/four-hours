@@ -17,6 +17,7 @@ import {
   sign,
   recordSubmission,
   assertOpen,
+  privacyIncident,
   type RecordState,
 } from "./core/ledger";
 import { recurring, collectiveCase } from "./core/recurrence";
@@ -79,7 +80,7 @@ async function view(key: string, context: RequestContext) {
     ...stored,
     assessment: classify(stored.data.incident),
     clocks: clocks(
-      stored.data.incident,
+      privacyIncident(stored.data),
       stored.data.signature,
       stored.data.receipts,
       new Date().toISOString(),

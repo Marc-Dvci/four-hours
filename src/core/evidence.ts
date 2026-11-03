@@ -1,5 +1,12 @@
 import { factsSchema, incidentSchema, type FactKey } from "./model";
-import { append, assertOpen, type RecordState } from "./ledger";
+import {
+  append,
+  assertOpen,
+  doraClosed,
+  privacyIncident,
+  recordPrivacy,
+  type RecordState,
+} from "./ledger";
 import { z } from "zod";
 export async function updateEvidence(
   state: RecordState,
@@ -7,7 +14,6 @@ export async function updateEvidence(
   actor: string,
   now: string,
 ): Promise<RecordState> {
-  assertOpen(state);
   const edit = z
     .object({
       field: factsSchema.keyof(),
@@ -16,6 +22,31 @@ export async function updateEvidence(
       url: z.string().url(),
     })
     .parse(input);
+  if (
+    doraClosed(state) &&
+    (edit.field === "personalDataBreach" || edit.field === "gdprRiskUnlikely")
+  ) {
+    const current = privacyIncident(state);
+    const fact = factsSchema.shape[edit.field].parse({
+      value: edit.value,
+      source: edit.source,
+      url: edit.url,
+      observedAt: now,
+      quality: state.incident.synthetic ? "synthetic" : "attested",
+    });
+    return recordPrivacy(
+      state,
+      {
+        awarenessAt: current.privacyAwarenessAt,
+        personalDataBreach: current.facts.personalDataBreach,
+        gdprRiskUnlikely: current.facts.gdprRiskUnlikely,
+        [edit.field]: fact,
+      },
+      actor,
+      now,
+    );
+  }
+  assertOpen(state);
   const incident = structuredClone(state.incident);
   const fact = {
     value: edit.value,

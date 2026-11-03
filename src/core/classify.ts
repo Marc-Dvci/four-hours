@@ -22,6 +22,24 @@ const share = (n: number | null, d: number | null, percent: number): Tri =>
 export function classify(input: Incident): Assessment {
   const incident = incidentSchema.parse(input);
   const f = incident.facts;
+  const evidenceIssues: Assessment["evidenceIssues"] = [];
+  for (const [numerator, denominator] of [
+    ["affectedClients", "totalClients"],
+    ["affectedCounterparts", "totalCounterparts"],
+    ["affectedTransactions", "dailyTransactions"],
+    ["affectedTransactionValue", "dailyTransactionValue"],
+  ] as const) {
+    const n = f[numerator].value;
+    const d = f[denominator].value;
+    if (n !== null && d !== null && (d === 0 || n > d))
+      evidenceIssues.push({
+        keys: [numerator, denominator],
+        reason:
+          d === 0
+            ? `${denominator} must be greater than zero to assess ${numerator}.`
+            : `${numerator} (${n}) exceeds ${denominator} (${d}). Correct the affected count or its reference total.`,
+      });
+  }
   const v = <K extends FactKey>(k: K): Facts[K]["value"] => f[k].value;
   const criteria: Criterion[] = [];
   const row = (
@@ -149,7 +167,7 @@ export function classify(input: Incident): Assessment {
   const result = all(critical, any(special, twoGroups));
   const verdict =
     result === true ? "MAJOR" : result === false ? "NOT_MAJOR" : "INCOMPLETE";
-  const missing = [
+  const missing: FactKey[] = [
     ...new Set(
       criteria
         .filter((c) => c.met === null)
@@ -163,6 +181,13 @@ export function classify(input: Incident): Assessment {
         ),
     ),
   ];
+  for (const issue of evidenceIssues) {
+    for (const key of issue.keys) if (!missing.includes(key)) missing.push(key);
+    for (const criterion of criteria.filter((c) =>
+      c.keys.some((k) => issue.keys.includes(k)),
+    ))
+      criterion.reason = `${criterion.reason} ${issue.reason}`;
+  }
   const explanation =
     verdict === "MAJOR"
       ? special === true
@@ -180,6 +205,7 @@ export function classify(input: Incident): Assessment {
     metGroups,
     unknownGroups,
     missing,
+    evidenceIssues,
     explanation,
   };
 }

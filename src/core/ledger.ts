@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { instant, type Incident } from "./model";
+import {
+  instant,
+  privacySchema,
+  type Incident,
+  type PrivacyAssessment,
+} from "./model";
 import { classify } from "./classify";
 import {
   clocks,
@@ -90,18 +95,74 @@ export type RecordState = {
   signature: Signature | null;
   receipts: Receipt[];
   revisions: Revision[];
+  privacy?: PrivacyAssessment;
   recurrence?: { memberIds: string[]; members: Incident[]; detectedAt: string };
   reportDetails?: Record<
     string,
     { value: string; source: string; url: string; observedAt: string }
   >;
 };
-export function assertOpen(state: RecordState): void {
+export function privacyIncident(state: RecordState): Incident {
+  if (!state.privacy) return state.incident;
+  const p = state.privacy;
+  const assessedAt = [
+    state.incident.assessedAt,
+    p.personalDataBreach.observedAt,
+    p.gdprRiskUnlikely.observedAt,
+  ]
+    .sort((a, b) => Date.parse(a) - Date.parse(b))
+    .at(-1)!;
+  return {
+    ...state.incident,
+    assessedAt,
+    privacyAwarenessAt: p.awarenessAt,
+    facts: {
+      ...state.incident.facts,
+      personalDataBreach: p.personalDataBreach,
+      gdprRiskUnlikely: p.gdprRiskUnlikely,
+    },
+  };
+}
+export function doraClosed(state: RecordState): boolean {
+  return state.receipts.some(
+    (r) => r.kind === "final" || r.kind === "reclassification",
+  );
+}
+/** A privacy follow-up appends evidence without rewriting the finalized DORA snapshot. */
+export async function recordPrivacy(
+  state: RecordState,
+  input: PrivacyAssessment,
+  actor: string,
+  now: string,
+): Promise<RecordState> {
+  const privacy = privacySchema.parse(input);
+  instant.parse(now);
+  if (state.receipts.some((r) => r.kind === "gdpr"))
+    throw new Error(
+      "The GDPR notification is already recorded. Retain its evidence and create a linked privacy follow-up.",
+    );
   if (
-    state.receipts.some(
-      (r) => r.kind === "final" || r.kind === "reclassification",
+    (privacy.awarenessAt &&
+      Date.parse(privacy.awarenessAt) > Date.parse(now)) ||
+    [privacy.personalDataBreach, privacy.gdprRiskUnlikely].some(
+      (f) => Date.parse(f.observedAt) > Date.parse(now),
     )
   )
+    throw new Error("Privacy evidence and awareness cannot be in the future");
+  return {
+    ...state,
+    privacy,
+    revisions: await append(
+      state.revisions,
+      actor,
+      "privacy.assessed",
+      privacy,
+      now,
+    ),
+  };
+}
+export function assertOpen(state: RecordState): void {
+  if (doraClosed(state))
     throw new Error(
       "This incident is closed by its final report or reclassification notice",
     );
@@ -222,12 +283,13 @@ export async function recordSubmission(
   if (!(await verify(state.revisions)))
     throw new Error("The evidence chain is invalid");
   const data = receiptSchema.parse(input);
+  const privacy = privacyIncident(state);
   if (data.kind !== "gdpr") assertOpen(state);
   if (data.kind === "gdpr") {
     if (
-      state.incident.facts.personalDataBreach.value !== true ||
-      state.incident.facts.gdprRiskUnlikely.value !== false ||
-      !state.incident.privacyAwarenessAt
+      privacy.facts.personalDataBreach.value !== true ||
+      privacy.facts.gdprRiskUnlikely.value !== false ||
+      !privacy.privacyAwarenessAt
     )
       throw new Error(
         "Record the personal-data breach, risk test and separate awareness time first",
@@ -260,7 +322,7 @@ export async function recordSubmission(
     data.kind === "reclassification" ? state.signature : historical;
   const classificationAnchor =
     data.kind === "gdpr"
-      ? state.incident.privacyAwarenessAt!
+      ? privacy.privacyAwarenessAt!
       : data.kind === "reclassification"
         ? (state.signature!.classifiedAt ?? state.signature!.signedAt)
         : (reportSignature?.majorClassifiedAt ??
@@ -302,12 +364,9 @@ export async function recordSubmission(
     throw new Error("Reports must be recorded in chronological order");
   if (state.receipts.some((r) => r.reference === data.reference))
     throw new Error("This authority reference is already recorded");
-  const deadline = clocks(
-    state.incident,
-    state.signature,
-    state.receipts,
-    now,
-  ).find((c) => c.id === data.kind)?.dueAt;
+  const deadline = clocks(privacy, state.signature, state.receipts, now).find(
+    (c) => c.id === data.kind,
+  )?.dueAt;
   if (
     deadline &&
     !(data.kind === "intermediate" && intermediates.length) &&

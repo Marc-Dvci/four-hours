@@ -1,5 +1,10 @@
 import { classify } from "./classify";
-import { hash, signatureCurrent, type RecordState } from "./ledger";
+import {
+  hash,
+  signatureCurrent,
+  privacyIncident,
+  type RecordState,
+} from "./ledger";
 import type { ReportKind } from "./clocks";
 import { detailsFor } from "./report-details";
 import { verifyRecord } from "./integrity";
@@ -95,7 +100,7 @@ export function reportFields(
       field(
         "privacy-awareness",
         "Personal-data-breach awareness",
-        i.privacyAwarenessAt,
+        privacyIncident(state).privacyAwarenessAt,
         ["Privacy assessment"],
       ),
     ];
@@ -200,12 +205,23 @@ export async function workpaper(state: RecordState): Promise<string> {
         `| ${c.label} | ${c.met === null ? "INCOMPLETE" : c.met ? "MET" : "BELOW"} | ${c.reference} |`,
     )
     .join("\n");
-  const evidence = Object.entries(state.incident.facts)
-    .map(
-      ([k, f]) =>
-        `| ${k} | ${JSON.stringify(f.value)} | ${f.quality} | ${f.source.replace(/\|/g, "/")} | ${f.observedAt} | ${f.url} |`,
-    )
-    .join("\n");
+  const evidence =
+    Object.entries(state.incident.facts)
+      .map(
+        ([k, f]) =>
+          `| ${k} | ${JSON.stringify(f.value)} | ${f.quality} | ${f.source.replace(/\|/g, "/")} | ${f.observedAt} | ${f.url} |`,
+      )
+      .join("\n") +
+    (state.privacy
+      ? `\n\n## Privacy follow-up\n\nThe finalized DORA evidence and signature above are unchanged.\n\nPrivacy awareness: ${state.privacy.awarenessAt ?? "Not recorded"}.\n\n| Field | Value | Source | Observed at | URL |\n|---|---|---|---|---|\n${(
+          ["personalDataBreach", "gdprRiskUnlikely"] as const
+        )
+          .map((key) => {
+            const fact = state.privacy![key];
+            return `| ${key} | ${JSON.stringify(fact.value)} | ${fact.source.replace(/\|/g, "/")} | ${fact.observedAt} | ${fact.url} |`;
+          })
+          .join("\n")}`
+      : "");
   return `# Four Hours · ${state.incident.id}\n\n${state.incident.title}\n\n${state.incident.synthetic ? "Synthetic demonstration incident." : "Live incident evidence."}\n\n## Classification\n\n${a.verdict}. ${a.explanation}\n\nRule version: ${a.ruleVersion}\n\n| Criterion | Result | Reference |\n|---|---|---|\n${rows}\n\n## Signature\n\n${state.signature ? `${state.signature.actor} · ${state.signature.signedAt}\n\n${state.signature.rationale}` : "Awaiting officer signature."}\n\nEvidence SHA-256: ${evidenceHash}\n\nSignature current: ${state.signature?.evidenceHash === evidenceHash}\n\n## Evidence register\n\n| Field | Value | Quality | Source | Observed at | URL |\n|---|---|---|---|---|---|\n${evidence}\n\n## Report preparation fields\n\n${
     Object.entries(state.reportDetails ?? {})
       .map(

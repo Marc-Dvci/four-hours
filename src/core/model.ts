@@ -42,6 +42,12 @@ export const factsSchema = z.object({
   gdprRiskUnlikely: bool,
 });
 export type Facts = z.infer<typeof factsSchema>;
+export const privacySchema = z.object({
+  awarenessAt: instant.nullable(),
+  personalDataBreach: bool,
+  gdprRiskUnlikely: bool,
+});
+export type PrivacyAssessment = z.infer<typeof privacySchema>;
 export type FactKey = keyof Facts;
 export type Fact<T> = {
   value: T | null;
@@ -125,6 +131,7 @@ export type Assessment = {
   metGroups: number;
   unknownGroups: number;
   missing: FactKey[];
+  evidenceIssues: { keys: FactKey[]; reason: string }[];
   explanation: string;
 };
 export const EU_STATES = new Set(

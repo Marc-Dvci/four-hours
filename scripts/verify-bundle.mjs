@@ -23,6 +23,7 @@ export function verifyBundle(bundle, expectedHash) {
   let projection = null;
   const details = {};
   let recurrence = null;
+  let privacy = null;
   if (!state || !Array.isArray(state.revisions))
     return { valid: false, reason: "Missing revision history" };
   for (const [n, entry] of state.revisions.entries()) {
@@ -67,6 +68,7 @@ export function verifyBundle(bundle, expectedHash) {
       projection.assessedAt = event.at;
     } else if (event.action === "evidence.imported")
       projection = structuredClone(p.incident);
+    else if (event.action === "privacy.assessed") privacy = structuredClone(p);
     else if (event.action === "report.field.updated") details[p.code] = p.fact;
     else if (
       !/^report\.(initial|intermediate|final|reclassification|gdpr)\.recorded$/.test(
@@ -82,7 +84,8 @@ export function verifyBundle(bundle, expectedHash) {
     };
   if (
     stable(details) !== stable(state.reportDetails ?? {}) ||
-    stable(recurrence) !== stable(state.recurrence ?? null)
+    stable(recurrence) !== stable(state.recurrence ?? null) ||
+    stable(privacy) !== stable(state.privacy ?? null)
   )
     return {
       valid: false,

@@ -7,6 +7,7 @@ import { REPORT_DETAILS, type DetailCode } from "../core/report-details";
 import { makeIncident, serviceGraph } from "../demo/bank";
 import type { ReportField } from "../core/reports";
 import type { RecurrenceResult } from "../core/recurrence";
+import { doraClosed, privacyIncident } from "../core/ledger";
 import "./style.css";
 
 type Tab = "classification" | "dependencies" | "reports" | "history";
@@ -198,6 +199,7 @@ function App() {
   const row = app?.records.find((r) => r.data.incident.id === selected);
   const state = row?.data;
   const incident = state?.incident;
+  const privacy = state ? privacyIncident(state) : undefined;
   const assessment = incident ? client.classify(incident) : null;
   const stale = Boolean(
     row &&
@@ -206,7 +208,7 @@ function App() {
   );
   const currentClocks =
     state && app
-      ? client.clocks(state.incident, state.signature, state.receipts, app.now)
+      ? client.clocks(privacy!, state.signature, state.receipts, app.now)
       : [];
   const active = nextDeadline(currentClocks);
   const reportingClosed =
@@ -327,16 +329,20 @@ function App() {
   }
   function edit(k: FactKey) {
     if (!incident) return;
+    const fact =
+      k === "personalDataBreach" || k === "gdprRiskUnlikely"
+        ? privacy!.facts[k]
+        : incident.facts[k];
     setField(k);
     setDraftValue(
-      incident.facts[k].value === null
+      fact.value === null
         ? ""
-        : Array.isArray(incident.facts[k].value)
-          ? (incident.facts[k].value as string[]).join(", ")
-          : String(incident.facts[k].value),
+        : Array.isArray(fact.value)
+          ? (fact.value as string[]).join(", ")
+          : String(fact.value),
     );
-    setSource(incident.facts[k].source);
-    setSourceUrl(incident.facts[k].url);
+    setSource(fact.source);
+    setSourceUrl(fact.url);
     setModal("edit");
   }
   function editDetail(code: DetailCode) {
@@ -643,8 +649,8 @@ function App() {
                         rootCause: incident.rootCause,
                         occurredAt: isoLocal(incident.occurredAt),
                         awarenessAt: isoLocal(incident.awarenessAt),
-                        privacyAwarenessAt: incident.privacyAwarenessAt
-                          ? isoLocal(incident.privacyAwarenessAt)
+                        privacyAwarenessAt: privacy!.privacyAwarenessAt
+                          ? isoLocal(privacy!.privacyAwarenessAt)
                           : "",
                         entity: incident.entity,
                         timezone: incident.timezone,
@@ -932,9 +938,21 @@ function App() {
                       {expanded === c.id && (
                         <div className="criterion-detail">
                           <p className="threshold">{c.threshold}</p>
+                          {assessment.evidenceIssues
+                            .filter((issue) =>
+                              issue.keys.some((k) => c.keys.includes(k)),
+                            )
+                            .map((issue) => (
+                              <p className="message warning" key={issue.reason}>
+                                {issue.reason}
+                              </p>
+                            ))}
                           <dl>
                             {c.keys.map((k) => (
-                              <div className="fact" key={k}>
+                              <div
+                                className={`fact${assessment.missing.includes(k) ? " evidence-gap" : ""}`}
+                                key={k}
+                              >
                                 <dt>
                                   {human(k)}
                                   <small>
@@ -1281,10 +1299,10 @@ function App() {
                     disabled={
                       busy ||
                       (reportKind === "gdpr"
-                        ? incident.facts.personalDataBreach.value !== true ||
-                          incident.facts.gdprRiskUnlikely.value !== false ||
-                          !incident.privacyAwarenessAt
-                        : !state?.signature || stale)
+                        ? privacy!.facts.personalDataBreach.value !== true ||
+                          privacy!.facts.gdprRiskUnlikely.value !== false ||
+                          !privacy!.privacyAwarenessAt
+                        : !state?.signature || stale || doraClosed(state))
                     }
                     onClick={() => {
                       setSubmitted(isoLocal(app!.now));
@@ -1329,7 +1347,7 @@ function App() {
                     <span>
                       Personal-data breach:{" "}
                       <strong>
-                        {valueText(incident.facts.personalDataBreach.value)}
+                        {valueText(privacy!.facts.personalDataBreach.value)}
                       </strong>
                     </span>
                     <button
@@ -1343,7 +1361,7 @@ function App() {
                     <span>
                       Risk unlikely:{" "}
                       <strong>
-                        {valueText(incident.facts.gdprRiskUnlikely.value)}
+                        {valueText(privacy!.facts.gdprRiskUnlikely.value)}
                       </strong>
                     </span>
                     <button
@@ -1355,8 +1373,8 @@ function App() {
                   </div>
                   <small>
                     Privacy awareness:{" "}
-                    {incident.privacyAwarenessAt
-                      ? time(incident.privacyAwarenessAt, true) + " Paris"
+                    {privacy!.privacyAwarenessAt
+                      ? time(privacy!.privacyAwarenessAt, true) + " Paris"
                       : "Not recorded; set it in incident context"}
                   </small>
                 </div>
@@ -1607,6 +1625,7 @@ function App() {
             </label>
             <input
               id="context-entity-id"
+              disabled={!!state && doraClosed(state)}
               value={contextDraft.entityId}
               maxLength={100}
               required
@@ -1621,6 +1640,7 @@ function App() {
             <label htmlFor="context-service">Affected service</label>
             <input
               id="context-service"
+              disabled={!!state && doraClosed(state)}
               value={contextDraft.service}
               onChange={(e) =>
                 setContextDraft({ ...contextDraft, service: e.target.value })
@@ -1632,6 +1652,7 @@ function App() {
             </label>
             <input
               id="context-service-id"
+              disabled={!!state && doraClosed(state)}
               value={contextDraft.serviceId}
               onChange={(e) =>
                 setContextDraft({ ...contextDraft, serviceId: e.target.value })
@@ -1641,6 +1662,7 @@ function App() {
             <label htmlFor="context-root">Apparent root cause</label>
             <input
               id="context-root"
+              disabled={!!state && doraClosed(state)}
               value={contextDraft.rootCause}
               onChange={(e) =>
                 setContextDraft({ ...contextDraft, rootCause: e.target.value })
@@ -1653,6 +1675,7 @@ function App() {
             </label>
             <input
               id="context-occurrence"
+              disabled={!!state && doraClosed(state)}
               type="datetime-local"
               value={contextDraft.occurredAt}
               onChange={(e) =>
@@ -1663,6 +1686,7 @@ function App() {
             <label htmlFor="context-awareness">ICT awareness time</label>
             <input
               id="context-awareness"
+              disabled={!!state && doraClosed(state)}
               type="datetime-local"
               value={contextDraft.awarenessAt}
               onChange={(e) =>
@@ -1690,6 +1714,7 @@ function App() {
             <label htmlFor="context-entity">Entity type</label>
             <select
               id="context-entity"
+              disabled={!!state && doraClosed(state)}
               value={contextDraft.entity}
               onChange={(e) =>
                 setContextDraft({ ...contextDraft, entity: e.target.value })
@@ -1706,6 +1731,7 @@ function App() {
             <label htmlFor="context-zone">Reporting timezone</label>
             <input
               id="context-zone"
+              disabled={!!state && doraClosed(state)}
               value={contextDraft.timezone}
               onChange={(e) =>
                 setContextDraft({ ...contextDraft, timezone: e.target.value })
@@ -1715,6 +1741,7 @@ function App() {
             <label htmlFor="context-exempt">Recurring-incident exemption</label>
             <select
               id="context-exempt"
+              disabled={!!state && doraClosed(state)}
               value={String(contextDraft.recurrenceExempt)}
               onChange={(e) =>
                 setContextDraft({
