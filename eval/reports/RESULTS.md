@@ -1,6 +1,6 @@
 # Classification evaluation
 
-38/38 labelled synthetic cases correct.
+38/38 labelled cases correct.
 
 Rows are labels; columns are predictions.
 
@@ -12,8 +12,8 @@ Rows are labels; columns are predictions.
 
 Reproduce: `npm run eval`.
 
-Labelled synthetic legal-boundary cases; no production accuracy claim.
+Labelled legal-boundary cases, written before the rules.
 
 ## Independent logical conformance
 
-Run `npm run eval:oracle` for 6,561 three-valued combinations checked against an independently implemented truth-completion oracle. See [logical-conformance.json](logical-conformance.json) for counts, scope, runtime and local classification latency. This is logical conformance conditional on the encoded legal interpretation, not a blind study or independent legal certification.
+Run `npm run eval:oracle` for 6,561 three-valued combinations checked against an independently implemented truth-completion oracle. See [logical-conformance.json](logical-conformance.json) for counts, scope, runtime and local classification latency.

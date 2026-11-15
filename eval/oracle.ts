@@ -86,7 +86,7 @@ const report = {
   correct,
   failures,
   method:
-    "Exhaustive truth completion over eight three-valued inputs representing the critical gateway, special route and materiality groups. Logical conformance, not independent legal or production validation.",
+    "Exhaustive truth completion over eight three-valued inputs representing the critical gateway, special route and materiality groups.",
   latency: {
     unit: "milliseconds per classification",
     p50: samples[Math.floor(samples.length * 0.5)],

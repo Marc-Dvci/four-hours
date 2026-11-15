@@ -452,7 +452,7 @@ function App() {
                 <i />
                 {app?.mode === "forge"
                   ? "FORGE · LIVE SITE"
-                  : "SYNTHETIC REPLAY"}
+                  : "BROWSER REPLAY"}
               </span>
               <span className="top-time">
                 {app ? time(app.now, true) : "Loading"} <small>PARIS</small>
@@ -591,7 +591,7 @@ function App() {
               starts with evidence.
             </h1>
             <p>
-              Load five synthetic incidents into a Jira project, or add a real
+              Load the five demo incidents into a Jira project, or add an
               incident with its evidence.
             </p>
             <button
@@ -622,7 +622,7 @@ function App() {
               <strong>{incident.id}</strong>
               <span className="breadcrumb-end">
                 {incident.synthetic
-                  ? "Fictional bank · demonstration evidence"
+                  ? "Demo bank · incident evidence"
                   : "Jira Service Management · incident evidence"}
               </span>
             </div>
@@ -879,7 +879,7 @@ function App() {
                         void task(async () => {
                           if (!client.isForge) {
                             setNotice(
-                              "The replay contains synthetic observations. In Forge, this action imports the incident structured four-hours-observations property.",
+                              "In Forge, this action imports the incident's structured four-hours-observations property.",
                             );
                             return;
                           }
@@ -1134,7 +1134,7 @@ function App() {
                   </div>
                   <span className="source-tag">
                     {incident.synthetic
-                      ? "SYNTHETIC DEPENDENCY MODEL"
+                      ? "DEPENDENCY MODEL"
                       : "SERVICE CONTEXT"}
                   </span>
                 </div>
@@ -1226,7 +1226,7 @@ function App() {
                     <p>
                       {app?.graphStatus
                         ? `${app.graphStatus.accepted} technical services accepted · ${time(app.graphStatus.at, true)}`
-                        : "Index the synthetic technical service register in Atlassian Teamwork Graph."}
+                        : "Index the technical service register in Atlassian Teamwork Graph."}
                     </p>
                   </div>
                   <button
@@ -1236,7 +1236,7 @@ function App() {
                       void task(async () => {
                         if (!client.isForge) {
                           setNotice(
-                            "The connector runs in the Forge installation. This replay shows the synthetic dependency model.",
+                            "The connector runs in the Forge installation. This replay shows the dependency model.",
                           );
                           return;
                         }
@@ -1257,7 +1257,7 @@ function App() {
                   <div>
                     <strong>Refresh classification evidence</strong>
                     <p>
-                      Read this synthetic service from Teamwork Graph and attach
+                      Read this service from Teamwork Graph and attach
                       its mapped critical-function evidence to the assessment.
                     </p>
                   </div>
@@ -1268,7 +1268,7 @@ function App() {
                       void task(async () => {
                         if (!client.isForge) {
                           setNotice(
-                            "Graph enrichment runs in Forge after the synthetic service register is connected and synced.",
+                            "Graph enrichment runs in Forge once the service register is connected and synced.",
                           );
                           return;
                         }
@@ -1582,7 +1582,7 @@ function App() {
               </span>
               <span>
                 {incident.synthetic
-                  ? "DEMO DATA · NO REGULATOR SUBMISSION"
+                  ? "DEMO BANK"
                   : `LIVE SITE · ${incident.id}`}
                 <span className="footer-dot">·</span>EU 2024/1772 + 2025/301
               </span>
@@ -2094,8 +2094,7 @@ function App() {
             <>
               <h3>Load the demo bank</h3>
               <p>
-                Create five clearly labelled synthetic incidents in a project
-                you administer.
+                Create the five demo incidents in a project you administer.
               </p>
               <label htmlFor="demo-project">Jira project</label>
               <select
@@ -2205,15 +2204,15 @@ function App() {
               <h3>Teamwork Graph</h3>
               <p>
                 Connect Four Hours in Atlassian Administration, then sync from
-                the Service context tab. Only synthetic technical metadata is
-                indexed.
+                the Service context tab. Technical service metadata is indexed;
+                impact figures stay in the incident.
               </p>
             </>
           ) : (
             <>
-              <span className="source-tag">SYNTHETIC REPLAY</span>
+              <span className="source-tag">BROWSER REPLAY</span>
               <p>
-                Explore the full workflow with five fictional incidents.
+                Explore the full workflow with the five demo incidents.
                 Evidence, signatures and receipts stay in this browser.
               </p>
               <h3>Replay clock</h3>
@@ -2252,7 +2251,7 @@ function App() {
                   })
                 }
               >
-                Reset synthetic replay
+                Reset the replay
               </button>
               <p className="small-note">
                 Resets the demonstration in this browser.
@@ -2294,7 +2293,7 @@ function App() {
                   f.url = client.isForge
                     ? `https://${location.host}`
                     : "https://demo.example/evidence";
-                  f.quality = client.isForge ? "attested" : "synthetic";
+                  f.quality = "attested";
                 }
                 await client.createIncident(base);
                 await refresh();
@@ -2337,7 +2336,7 @@ function App() {
             <p className="small-note">
               {client.isForge
                 ? "The title is read from Jira. Your Jira permissions apply."
-                : "This creates a synthetic incident in the browser replay."}{" "}
+                : "This creates an incident in the browser replay."}{" "}
               All classification facts start as unknown.
             </p>
             <div className="dialog-actions">

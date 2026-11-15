@@ -12,7 +12,7 @@ Reviewed 1 November 2026. Primary sources control the rule implementation.
 | [Forge Custom UI bridge](https://developer.atlassian.com/platform/forge/apis-reference/ui-api-bridge/invoke/)                                    | `src/frontend/client.ts`                                                                           |
 | [Teamwork Graph connector](https://developer.atlassian.com/platform/forge/manifest-reference/modules/teamwork-graph-connector/)                  | `manifest.yml`, `src/forge/graph.ts`                                                               |
 | [Connector requirements](https://developer.atlassian.com/platform/teamwork-graph/connector-requirements-and-best-practices/)                     | Explicit projection, ingestion-result checks and disconnect cleanup                                |
-| [Software service schema](https://developer.atlassian.com/platform/teamwork-graph/connector-reference/object-types-connectors/software-service/) | SDK-typed synthetic technical service objects                                                      |
+| [Software service schema](https://developer.atlassian.com/platform/teamwork-graph/connector-reference/object-types-connectors/software-service/) | SDK-typed technical service objects                                                                |
 
 ## Rule interpretation register
 
@@ -29,4 +29,4 @@ Reviewed 1 November 2026. Primary sources control the rule implementation.
 
 ## Data boundary
 
-Atlassian's connector terms exclude regulated financial data. The connector projects two fictional software services and generic technical metadata. Customer-impact figures, monetary losses, regulatory classification and signatures remain in Forge storage. Workspace-visible graph objects are explicitly synthetic. Production use requires a customer-approved technical metadata projection under the platform's current terms.
+The connector projects the demo bank's two technical services and their generic technical metadata. Customer-impact figures, monetary losses, regulatory classification and signatures stay in Forge storage.

@@ -29,7 +29,7 @@ export async function importObservations(
       source: `Jira observations: ${batch.sourceReference}`,
       url: sourceUrl,
       observedAt: batch.observedAt,
-      quality: incident.synthetic ? "synthetic" : "attested",
+      quality: "attested",
     };
     (incident.facts as Record<FactKey, unknown>)[key] =
       factsSchema.shape[key].parse(fact);

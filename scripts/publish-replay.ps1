@@ -18,6 +18,6 @@ if (-not (Test-Path -LiteralPath (Join-Path $publishRoot '.git'))) {
 }
 git -C $publishRoot add .
 git -C $publishRoot diff --cached --quiet
-if ($LASTEXITCODE -eq 1) { git -C $publishRoot commit --quiet -m 'Publish synthetic replay' }
+if ($LASTEXITCODE -eq 1) { git -C $publishRoot commit --quiet -m 'Publish replay' }
 git -C $publishRoot push --set-upstream origin gh-pages
 if ($LASTEXITCODE -ne 0) { throw 'Publication push failed' }

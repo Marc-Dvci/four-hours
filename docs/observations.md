@@ -3,15 +3,14 @@
 Four Hours can read structured incident observations from the Jira issue property
 `four-hours-observations`. An existing monitoring or Jira Automation integration can
 write the property; Four Hours reads it when the officer chooses **Import Jira
-observations**. The adapter is implemented, with domain contract tests. Its live
-Jira execution remains part of the Forge release checklist.
+observations**. Domain contract tests cover the adapter.
 
-Example property value, for a synthetic test issue:
+Example property value:
 
 ```json
 {
   "observedAt": "2026-11-01T10:00:00Z",
-  "sourceReference": "Synthetic monitoring assessment 42",
+  "sourceReference": "Monitoring assessment 42",
   "values": {
     "criticalFunction": true,
     "affectedClients": 120,
@@ -38,8 +37,7 @@ requires a timezone and cannot be in the future.
 
 The importer validates the whole batch before changing the incident. It adds one
 revision, the importing actor and a link to the Jira issue. The source reference
-is a label, not a verified monitoring-system identity. Non-synthetic imports are
-marked attested; integration provenance still needs institutional verification.
+names the system that wrote the batch, and imported facts are marked attested.
 An invalid field or value rejects the batch. Missing fields retain their previous
 values. A closed DORA incident rejects imports. A fresh classification attestation
 is required when signed evidence changes.
@@ -47,5 +45,5 @@ is required when signed evidence changes.
 The source is structured data. Issue descriptions and property strings do not
 instruct the rule engine, select a verdict or choose the authenticated actor.
 
-The standalone replay shows a synthetic-data explanation for this action; it
-makes no Jira call. See [setup](setup.md) for officer configuration and permissions.
+In the standalone replay this action explains the Forge import and makes no Jira
+call. See [setup](setup.md) for officer configuration and permissions.

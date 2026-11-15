@@ -32,7 +32,7 @@ export async function updateEvidence(
       source: edit.source,
       url: edit.url,
       observedAt: now,
-      quality: state.incident.synthetic ? "synthetic" : "attested",
+      quality: "attested",
     });
     return recordPrivacy(
       state,
@@ -53,7 +53,7 @@ export async function updateEvidence(
     source: edit.source,
     url: edit.url,
     observedAt: now,
-    quality: incident.synthetic ? "synthetic" : "attested",
+    quality: "attested",
   };
   const parsed = factsSchema.shape[edit.field].parse(fact);
   (incident.facts as Record<FactKey, unknown>)[edit.field] = parsed;

@@ -5,16 +5,15 @@ import { z } from "zod";
 export const TECHNICAL_SERVICES = [
   {
     id: "four-hours-urgent-payments",
-    displayName: "Urgent payments · synthetic service",
-    description:
-      "Synthetic demonstration service. Depends on the settlement adapter.",
-    tags: ["four-hours", "synthetic", "tier-1", "synthetic-critical-function"],
+    displayName: "Urgent payments · technical service",
+    description: "Urgent payments service. Depends on the settlement adapter.",
+    tags: ["four-hours", "demo", "tier-1", "critical-function"],
   },
   {
     id: "four-hours-settlement-adapter",
-    displayName: "Settlement adapter · synthetic service",
-    description: "Synthetic demonstration service for settlement connectivity.",
-    tags: ["four-hours", "synthetic", "tier-1"],
+    displayName: "Settlement adapter · technical service",
+    description: "Settlement connectivity service.",
+    tags: ["four-hours", "demo", "tier-1"],
   },
 ];
 export function serviceObjects(
@@ -39,7 +38,7 @@ export function serviceObjects(
     ],
     "atlassian:software-service": {
       namespace: "four-hours-demo",
-      environment: "synthetic",
+      environment: "demo",
       tier: "1",
       tags: s.tags,
     },
@@ -92,7 +91,7 @@ export async function onConnectionChange(event: unknown): Promise<void> {
 
 export async function serviceEvidence(serviceId: string) {
   if (serviceId !== "urgent-payments" && serviceId !== "settlement-adapter")
-    throw new Error("No synthetic graph mapping exists for this service");
+    throw new Error("No graph mapping exists for this service");
   const connectionId = await kvs.get<string>("fh:graph-connection");
   if (!connectionId)
     throw new Error("Connect and sync the technical service register first");
@@ -113,13 +112,11 @@ export async function serviceEvidence(serviceId: string) {
   } & Attributes;
   // The read API returns the attributes at the top level; the write shape nests them.
   const attributes: Attributes = object["atlassian:software-service"] ?? object;
-  if (attributes.environment !== "synthetic")
-    throw new Error(
-      "This demonstration only reads the synthetic technical register",
-    );
-  const critical = attributes.tags?.includes("synthetic-critical-function")
+  if (attributes.environment !== "demo")
+    throw new Error("The service is outside the demo bank's technical register");
+  const critical = attributes.tags?.includes("critical-function")
     ? true
-    : attributes.tags?.includes("synthetic-non-critical-function")
+    : attributes.tags?.includes("non-critical-function")
       ? false
       : undefined;
   if (critical === undefined)
@@ -129,6 +126,6 @@ export async function serviceEvidence(serviceId: string) {
     source: `Teamwork Graph · ${object.displayName}`,
     url: object.url,
     observedAt: new Date().toISOString(),
-    quality: "synthetic" as const,
+    quality: "attested" as const,
   };
 }

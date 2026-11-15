@@ -11,17 +11,17 @@ import { serviceObjects, serviceEvidence } from "../src/forge/graph";
 describe("technical graph projection", () => {
   for (const [tags, expected] of [
     [[], undefined],
-    [["synthetic-critical-function"], true],
-    [["synthetic-non-critical-function"], false],
+    [["critical-function"], true],
+    [["non-critical-function"], false],
   ] as const)
     it(`requires an explicit classification mapping: ${expected}`, async () => {
       getSetting.mockResolvedValue("connected");
       getObject.mockResolvedValue({
         success: true,
         object: {
-          displayName: "Synthetic service",
+          displayName: "Urgent payments",
           url: "https://example.com/service",
-          "atlassian:software-service": { environment: "synthetic", tags },
+          "atlassian:software-service": { environment: "demo", tags },
         },
       });
       if (expected === undefined)
@@ -36,17 +36,17 @@ describe("technical graph projection", () => {
     getObject.mockResolvedValue({
       success: true,
       object: {
-        displayName: "Urgent payments · synthetic service",
+        displayName: "Urgent payments · technical service",
         url: "https://example.com/service",
         schemaVersion: "2.0",
-        environment: "synthetic",
-        tags: ["synthetic", "synthetic-critical-function"],
+        environment: "demo",
+        tags: ["demo", "critical-function"],
       },
     });
     const fact = await serviceEvidence("urgent-payments");
     expect(fact.value).toBe(true);
     expect(fact.source).toBe(
-      "Teamwork Graph · Urgent payments · synthetic service",
+      "Teamwork Graph · Urgent payments · technical service",
     );
   });
   it("writes software-service objects with schema version 2.0", () => {
@@ -56,7 +56,7 @@ describe("technical graph projection", () => {
     ))
       expect(o.schemaVersion).toBe("2.0");
   });
-  it("projects only synthetic technical service metadata", () => {
+  it("projects only the demo bank's technical service metadata", () => {
     const objects = serviceObjects(
       "https://test.atlassian.net",
       "2026-10-29T12:00:00Z",
@@ -64,7 +64,7 @@ describe("technical graph projection", () => {
     expect(objects).toHaveLength(2);
     expect(
       objects.every(
-        (x) => x["atlassian:software-service"].environment === "synthetic",
+        (x) => x["atlassian:software-service"].environment === "demo",
       ),
     ).toBe(true);
   });

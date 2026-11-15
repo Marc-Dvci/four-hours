@@ -180,7 +180,7 @@ resolver.define("loadDemo", async (req: Req) => {
     const marker = `fh:demo-item:${project}:${demo.id}`;
     let key = await kvs.get<string>(marker);
     if (!key) {
-      const description = `Service: ${demo.service}. Apparent root cause: ${demo.rootCause}. Synthetic demonstration incident: open Four Hours from this work item to review the classification evidence and reporting clocks.`;
+      const description = `Service: ${demo.service}. Apparent root cause: ${demo.rootCause}. Demo bank incident: open Four Hours from this work item to review the classification evidence and reporting clocks.`;
       // In a service project the incident is raised as a JSM request, so it carries its request type.
       const response = desk
         ? await api.asUser().requestJira(route`/rest/servicedeskapi/request`, {
@@ -467,7 +467,7 @@ resolver.define("refreshGraphEvidence", async (req: Req) => {
   assertOpen(stored.data);
   if (!stored.data.incident.synthetic)
     throw new Error(
-      "Graph enrichment is scoped to synthetic demonstration incidents",
+      "Graph enrichment covers the demo bank incidents",
     );
   const fact = await serviceEvidence(stored.data.incident.serviceId);
   const incident = structuredClone(stored.data.incident);

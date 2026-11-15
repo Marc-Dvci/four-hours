@@ -120,7 +120,7 @@ test("reset, clock advance, search and add unknown incident", async ({
   await page.getByRole("button", { name: "Open settings" }).click();
   await page.getByRole("button", { name: "Advance 2 hours" }).click();
   await expect(page.getByText("29 Oct, 13:08 Paris time")).toBeVisible();
-  await page.getByRole("button", { name: "Reset synthetic replay" }).click();
+  await page.getByRole("button", { name: "Reset the replay" }).click();
   await page
     .getByRole("button", { name: "Add incident", exact: false })
     .click();
@@ -298,7 +298,7 @@ test("standalone replay makes no external service calls", async ({ page }) => {
     .click();
   await expect(
     page.getByText(
-      "Graph enrichment runs in Forge after the synthetic service register is connected and synced.",
+      "Graph enrichment runs in Forge once the service register is connected and synced.",
     ),
   ).toBeVisible();
   expect(external).toEqual([]);

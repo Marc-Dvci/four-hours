@@ -2,12 +2,13 @@
 
 ![The Four Hours incident desk in Jira: seven DORA criteria, the verdict, and the reporting clock](docs/images/incident-desk.png)
 
-![Unit tests](https://img.shields.io/badge/unit_tests-166_passing-136b52) ![Cases](https://img.shields.io/badge/labelled_cases-38%2F38-136b52) ![Oracle](https://img.shields.io/badge/oracle-6%2C561%2F6%2C561-136b52) ![Licence](https://img.shields.io/badge/licence-MIT-101c30) ![Forge](https://img.shields.io/badge/Atlassian-Forge-0052CC)
+[![CI](https://github.com/Marc-Dvci/four-hours/actions/workflows/ci.yml/badge.svg)](https://github.com/Marc-Dvci/four-hours/actions/workflows/ci.yml) ![Unit tests](https://img.shields.io/badge/unit_tests-166_passing-136b52) ![Cases](https://img.shields.io/badge/labelled_cases-38%2F38-136b52) ![Oracle](https://img.shields.io/badge/oracle-6%2C561%2F6%2C561-136b52) ![Coverage](https://img.shields.io/badge/decision_core_coverage-91%25_lines-136b52) ![Licence](https://img.shields.io/badge/licence-MIT-101c30) ![Forge](https://img.shields.io/badge/Atlassian-Forge-0052CC)
 
 **Four Hours decides whether an ICT incident is major under DORA, from sourced evidence, inside the Jira Service
 Management incident, and starts the four-hour reporting clock when the bank's ICT risk officer signs.**
 
-I audit for a living. I test change-management controls in IT audits at a bank's technology practice.
+I tested change-management controls in IT audits at a bank's technology practice. Every review asked the same
+three questions: which evidence supported the decision, who made it, and when?
 
 | | |
 |---|---|
@@ -29,8 +30,7 @@ I audit for a living. I test change-management controls in IT audits at a bank's
 
 ## See it work
 
-You need a Jira Service Management space created from the IT service management template, as a site admin. The
-demo incidents belong to a fictional bank.
+You need a Jira Service Management space created from the IT service management template, as a site admin.
 
 1. Install with the [installation link](https://developer.atlassian.com/console/install/85a587af-acc6-454e-be6c-dabfb8d0eb66?signature=AYABeK4uKGS%2FbX9QkzTiDJiU2cYAAAADAAdhd3Mta21zAEthcm46YXdzOmttczp1cy13ZXN0LTI6NzA5NTg3ODM1MjQzOmtleS83MDVlZDY3MC1mNTdjLTQxYjUtOWY5Yi1lM2YyZGNjMTQ2ZTcAuAECAQB4CxqLTo9l4lqXuFjNim1xJM%2Bp%2F3TVP9xHS2BrU5DRRucB8LWZAhiaPTac7g8FRIuYLwAAAH4wfAYJKoZIhvcNAQcGoG8wbQIBADBoBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDA%2BHFVjt7tgKXtBXdwIBEIA7c7aIwMQnOLf7NxdEZLV8UBbfEkE4inFdgDTtgfvFw6x3lFgg%2B3MB1Yp1hNjQB8wyZCr%2BAZ4an5OGPkgAB2F3cy1rbXMAS2Fybjphd3M6a21zOmV1LXdlc3QtMTo3MDk1ODc4MzUyNDM6a2V5LzQ2MzBjZTZiLTAwYzMtNGRlMi04NzdiLTYyN2UyMDYwZTVjYwC4AQICAHi9bVMAkme4qVQX1fQHo6ePw3H40A7cGfz7yrmSfBWMXgFsBbXC6iYHvJFHdb%2F5oH%2FuAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMmLL6AuBEWBuXeTGWAgEQgDv0ZFgqAoX8ui6fxdu%2BgHgoxG%2FraAFVlCvXOgBSqnA5c2Yc%2F8%2BOs%2FtZp1oMeukg1BzaJlCZtcH7ps%2FeqwAHYXdzLWttcwBLYXJuOmF3czprbXM6dXMtZWFzdC0xOjcwOTU4NzgzNTI0MzprZXkvNmMxMjBiYTAtNGNkNS00OTg1LWI4MmUtNDBhMDQ5NTJjYzU3ALgBAgIAeDYASx0XCjkny4iLV6vz%2BKtEGSGT6kdt0QRpkn6D%2FlVEATzfL5izvFttq61wiDDEC80AAAB%2BMHwGCSqGSIb3DQEHBqBvMG0CAQAwaAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAwTwKviBDE6gvt6iGUCARCAO8%2FNE3QrkwPk8OZTywFeqtpfQriJLARZuX3FBNEwx%2FzlIPEVNNsuoI1elOmwiL%2F%2B6CqB5M7MMxnmtIsbAgAAAAAMAAAQAAAAAAAAAAAAAAAAAPLGgWe%2F%2FMWjWioNgmKNj9P%2F%2F%2F%2F%2FAAAAAQAAAAAAAAAAAAAAAQAAADLFXeDeQo5X%2B%2FxT1P%2FFc%2Fj2ydQYlsheSmU5EREUlS3fbOCIoedD2211gXvbE%2Bqwn%2B57eRpNxScdCThtL3iR9C6AzqM%3D&product=jira&product=confluence). Open **Apps > Four Hours** and click **Set up the incident
    desk**. Under **Load the demo bank**, choose the service space and click **Load demo bank**. Five incidents
@@ -117,7 +117,7 @@ Code computes every verdict, deadline and hash. There is no model in the decisio
 | Jira | `jira:issuePanel`, `jira:globalPage`, two `jira:adminPage` modules; permission checks with `mypermissions` for every read and edit; an issue property for structured observations | Incident manager and officer work in the same record |
 | Forge | Custom UI and resolvers, KVS custom entity `incident` with versioned writes, `graph:connector` with a connection-change function | No server of my own; data stays on the platform |
 | Confluence | REST v2 page creation and a content property for the workpaper | Where review evidence is kept |
-| Teamwork Graph | `setObjects` for the software-service objects, `getObjectByExternalId` to read the affected service back into the evidence | The demonstration uses synthetic service metadata; live enrichment requires an approved projection |
+| Teamwork Graph | `setObjects` for the software-service objects, `getObjectByExternalId` to read the affected service back into the evidence | Whether a service supports a critical function is an organisation-wide fact, held once outside any incident |
 
 ## Boundaries by design
 
@@ -135,6 +135,7 @@ Code computes every verdict, deadline and hash. There is no model in the decisio
 | Legal-boundary corpus | 38/38: 17 major, 17 not major, 4 incomplete | `npm run eval` |
 | Independent truth-completion oracle | 6,561/6,561 three-valued combinations agree | `npm run eval:oracle` |
 | Unit tests: rules, clocks, ledger, access, graph, Confluence, recurrence | 166 passing | `npm test` |
+| Decision core coverage (`src/core`), tests in random order | 91.2 % of lines, 84.2 % of branches; the classifier 100 % | `npm run coverage` |
 | Browser workflows, from signature to evidence export | 14 passing | `npm run test:browser` |
 | Type check | clean | `npm run typecheck` |
 
@@ -185,7 +186,8 @@ npm run deploy        # vite build + forge deploy -e production
 forge install -e production
 ```
 
-For an offline preview, `npm run dev` runs the same engine in the browser with five fictional incidents.
+For an offline preview, `npm run dev` runs the same engine in the browser with the five demo incidents, or open the
+[replay](https://marc-dvci.github.io/four-hours/).
 
 `src/core` holds the decision engine, clocks, ledger, recurrence and reports; `src/forge` the platform adapters;
 `src/frontend` the incident desk; `eval` the labelled cases and reports. [Sources](docs/SOURCES.md) lists every

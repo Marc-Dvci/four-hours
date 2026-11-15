@@ -13,8 +13,8 @@
 1. In Jira, open **Apps > Four Hours** and click **Set up the incident desk** (later, the gear at the top right of
    the desk opens the same **Incident desk settings**). The desk is also under **Jira settings > Apps > Four
    Hours**.
-2. Under **Load the demo bank**, choose the project and click **Load demo bank**. Five incidents for a fictional
-   bank are raised as JSM requests. Retrying resumes from the per-incident seed markers.
+2. Under **Load the demo bank**, choose the project and click **Load demo bank**. Five demo incidents are
+   raised as JSM requests. Retrying resumes from the per-incident seed markers.
 3. Open a demo work item and choose **Four Hours** from its apps button for the panel, or continue in the desk.
 4. Inspect the critical-services gateway and six materiality groups. Expand a row to see each fact and its
    provenance.
@@ -69,5 +69,5 @@ forge install -e production --product confluence --site your-site.atlassian.net
 
 ## Offline preview
 
-`npm ci && npm run dev` opens the same engine in the browser at http://127.0.0.1:4173 with five fictional incidents,
-a fixed Paris clock and browser-local storage. `npm run test:browser` runs the 13 browser workflows against it.
+`npm ci && npm run dev` opens the same engine in the browser at http://127.0.0.1:4173 with the five demo incidents,
+a fixed Paris clock and browser-local storage. `npm run test:browser` runs the 14 browser workflows against it.

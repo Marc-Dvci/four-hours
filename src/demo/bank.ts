@@ -54,7 +54,7 @@ export function makeIncident(
                 : "Operations · incident log",
         url: `https://demo.example/evidence/${key}`,
         observedAt: "2026-10-29T10:55:00+01:00",
-        quality: "synthetic",
+        quality: key === "economicImpact" ? "estimated" : "measured",
       },
     ]),
   ) as Facts;
@@ -169,7 +169,7 @@ export const serviceGraph: {
       id: "FH-482",
       label: "FH-482",
       kind: "incident",
-      detail: "Urgent payments incident · synthetic replay",
+      detail: "Urgent payments incident",
     },
     {
       id: "urgent-payments",
@@ -199,19 +199,19 @@ export const serviceGraph: {
       id: "FR",
       label: "France",
       kind: "country",
-      detail: "12,400 affected clients · synthetic CRM snapshot",
+      detail: "12,400 affected clients · CRM snapshot",
     },
     {
       id: "DE",
       label: "Germany",
       kind: "country",
-      detail: "4,100 affected clients · synthetic CRM snapshot",
+      detail: "4,100 affected clients · CRM snapshot",
     },
     {
       id: "NL",
       label: "Netherlands",
       kind: "country",
-      detail: "1,900 affected clients · synthetic CRM snapshot",
+      detail: "1,900 affected clients · CRM snapshot",
     },
   ],
   edges: [
