@@ -1,6 +1,8 @@
 # Four Hours: DORA incident classification in Jira Service Management
 
-![The Four Hours incident desk in Jira: seven DORA criteria, the verdict, and the reporting clock](docs/images/incident-desk.png)
+[![Watch the 2:45 film: Four Hours on a live Jira site](docs/images/film-thumbnail.jpg)](https://youtu.be/aGprsKvTvdc)
+
+**[Watch the film on YouTube (2:45)](https://youtu.be/aGprsKvTvdc)**
 
 [![CI](https://github.com/Marc-Dvci/four-hours/actions/workflows/ci.yml/badge.svg)](https://github.com/Marc-Dvci/four-hours/actions/workflows/ci.yml) ![Unit tests](https://img.shields.io/badge/unit_tests-166_passing-136b52) ![Cases](https://img.shields.io/badge/labelled_cases-38%2F38-136b52) ![Oracle](https://img.shields.io/badge/oracle-6%2C561%2F6%2C561-136b52) ![Coverage](https://img.shields.io/badge/decision_core_coverage-91%25_lines-136b52) ![Licence](https://img.shields.io/badge/licence-MIT-101c30) ![Forge](https://img.shields.io/badge/Atlassian-Forge-0052CC)
 
@@ -22,13 +24,15 @@ three questions: which evidence supported the decision, who made it, and when?
 
 | Criterion | Where to look |
 |---|---|
-| Technological implementation | [`manifest.yml`](manifest.yml) (issue panel, global page, two admin pages, KVS custom entity, Teamwork Graph connector), [`src/index.ts`](src/index.ts) resolvers, [`src/forge/`](src/forge) (access, Confluence, graph, storage), [live run](#run-live) |
-| Design | [See it work](#see-it-work), [the incident desk](src/frontend/main.tsx) |
+| Technological implementation | [`manifest.yml`](https://github.com/Marc-Dvci/four-hours/blob/v1.0.0/manifest.yml) (issue panel, global page, two admin pages, KVS custom entity, Teamwork Graph connector), [`src/index.ts`](https://github.com/Marc-Dvci/four-hours/blob/v1.0.0/src/index.ts) resolvers, [`src/forge/`](https://github.com/Marc-Dvci/four-hours/blob/v1.0.0/src/forge) (access, Confluence, graph, storage), [live run](#run-live) |
+| Design | [See it work](#see-it-work), [the incident desk](https://github.com/Marc-Dvci/four-hours/blob/v1.0.0/src/frontend/main.tsx) |
 | Potential impact | [The problem](#the-problem): the T2 outage of 27 February 2025 and 3,383 major ICT incidents reported in 2025 |
 | Innovation | [How it works](#how-it-works): unknowns kept visible, signed evidence versions, cross-service six-month recurrence, critical-service evidence from Teamwork Graph |
-| Presentation | [Evidence](#evidence), [claims](#claims), [rule sources](docs/SOURCES.md) |
+| Presentation | [Evidence](#evidence), [claims](#claims), [rule sources](https://github.com/Marc-Dvci/four-hours/blob/v1.0.0/docs/SOURCES.md) |
 
 ## See it work
+
+![The Four Hours incident desk in Jira: seven DORA criteria, the verdict, and the reporting clock](docs/images/incident-desk.png)
 
 You need a Jira Service Management space created from the IT service management template, as a site admin.
 
